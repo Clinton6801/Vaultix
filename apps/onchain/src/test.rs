@@ -1817,13 +1817,7 @@ fn test_refund_expired_authorization_check() {
 fn setup_funded_escrow_for_refund(
     env: &Env,
     deadline: u64,
-) -> (
-    VaultixEscrowClient,
-    Address,
-    u64,
-    token::Client,
-    Address,
-) {
+) -> (VaultixEscrowClient, Address, u64, token::Client, Address) {
     let contract_id = env.register_contract(None, VaultixEscrow);
     let client = VaultixEscrowClient::new(env, &contract_id);
 
@@ -1873,8 +1867,7 @@ fn test_refund_expired_deadline_not_reached() {
     env.mock_all_auths();
 
     let deadline = 5_000u64;
-    let (client, depositor, escrow_id, _, _) =
-        setup_funded_escrow_for_refund(&env, deadline);
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
 
     // At exactly the deadline — must be rejected (strict >)
     env.ledger().with_mut(|li| li.timestamp = deadline);
@@ -1895,8 +1888,7 @@ fn test_refund_expired_blocked_when_disputed() {
     env.mock_all_auths();
 
     let deadline = 1_000u64;
-    let (client, depositor, escrow_id, _, _) =
-        setup_funded_escrow_for_refund(&env, deadline);
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
 
     // Raise a dispute before the deadline passes
     client.raise_dispute(&escrow_id, &depositor);
@@ -1917,8 +1909,7 @@ fn test_refund_expired_blocked_when_fully_released() {
 
     // Use a far-future deadline so we can release the milestone first
     let deadline = 9_999_999_999u64;
-    let (client, depositor, escrow_id, _, _) =
-        setup_funded_escrow_for_refund(&env, deadline);
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
 
     // Release the only milestone — escrow transitions to Completed
     client.release_milestone(&escrow_id, &0);
@@ -1947,8 +1938,7 @@ fn test_refund_expired_blocked_when_paused() {
     env.mock_all_auths();
 
     let deadline = 1_000u64;
-    let (client, depositor, escrow_id, _, _) =
-        setup_funded_escrow_for_refund(&env, deadline);
+    let (client, depositor, escrow_id, _, _) = setup_funded_escrow_for_refund(&env, deadline);
 
     // Pause the contract
     client.set_paused(&true);
