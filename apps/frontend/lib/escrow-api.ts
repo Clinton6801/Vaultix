@@ -136,3 +136,40 @@ export const resolveDispute = (
     method: "POST",
     body: JSON.stringify(data),
   });
+
+// API Key Management
+export interface IApiKey {
+  id: string;
+  name: string;
+  active: boolean;
+  rateLimitPerMinute: number;
+  createdAt: string;
+  revokedAt?: string;
+}
+
+export interface IApiKeyCreationResponse {
+  id: string;
+  name: string;
+  key: string;
+  rateLimitPerMinute: number;
+  createdAt: string;
+}
+
+export const createApiKey = (data: {
+  name: string;
+  rateLimitPerMinute?: number;
+}): Promise<IApiKeyCreationResponse> =>
+  request<IApiKeyCreationResponse>("/api-keys", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const listApiKeys = (): Promise<IApiKey[]> =>
+  request<IApiKey[]>("/api-keys", {
+    method: "GET",
+  });
+
+export const revokeApiKey = (id: string): Promise<IApiKey> =>
+  request<IApiKey>(`/api-keys/${id}`, {
+    method: "DELETE",
+  });
