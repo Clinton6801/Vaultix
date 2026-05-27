@@ -173,3 +173,62 @@ export const revokeApiKey = (id: string): Promise<IApiKey> =>
   request<IApiKey>(`/api-keys/${id}`, {
     method: "DELETE",
   });
+
+// Global Events / Transaction History
+export interface IEventResponse {
+  id: string;
+  escrowId: string;
+  eventType: string;
+  actorId?: string;
+  data?: Record<string, any>;
+  ipAddress?: string;
+  createdAt: string;
+  escrow?: {
+    id: string;
+    title: string;
+    amount: number;
+    assetCode: string;
+    assetIssuer?: string;
+    status: string;
+  };
+  actor?: {
+    walletAddress?: string;
+  };
+}
+
+export interface IEventsListResponse {
+  data: IEventResponse[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export const fetchEvents = (
+  params: {
+    page?: number;
+    limit?: number;
+    eventType?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    sortBy?: string;
+    sortOrder?: "ASC" | "DESC";
+  } = {},
+): Promise<IEventsListResponse> => {
+  const queryParams = new URLSearchParams();
+
+  if (params.page) queryParams.set("page", String(params.page));
+  if (params.limit) queryParams.set("limit", String(params.limit));
+  if (params.eventType) queryParams.set("eventType", params.eventType);
+  if (params.dateFrom) queryParams.set("dateFrom", params.dateFrom);
+  if (params.dateTo) queryParams.set("dateTo", params.dateTo);
+  if (params.sortBy) queryParams.set("sortBy", params.sortBy);
+  if (params.sortOrder) queryParams.set("sortOrder", params.sortOrder);
+
+  const queryString = queryParams.toString();
+  return request<IEventsListResponse>(
+    `/events${queryString ? `?${queryString}` : ""}`,
+    {
+      method: "GET",
+    },
+  );
+};

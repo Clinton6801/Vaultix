@@ -9,6 +9,7 @@ import { useTheme } from "@/components/ThemeProvider";
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/transactions", label: "Transactions" },
   { href: "/escrow/create", label: "Create Escrow" },
   { href: "https://github.com/Vaultix", label: "GitHub", external: true },
 ];
@@ -26,7 +27,9 @@ export default function Navbar(): JSX.Element {
 
   // Close menu on resize to desktop
   useEffect(() => {
-    const handleResize = () => { if (window.innerWidth >= 768) setIsMenuOpen(false); };
+    const handleResize = () => {
+      if (window.innerWidth >= 768) setIsMenuOpen(false);
+    };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -35,7 +38,9 @@ export default function Navbar(): JSX.Element {
     <>
       <nav
         className={`fixed w-full z-50 transition-all duration-300 ${
-          scrolled || isMenuOpen ? "bg-black/90 backdrop-blur-md py-2" : "bg-transparent py-4"
+          scrolled || isMenuOpen
+            ? "bg-black/90 backdrop-blur-md py-2"
+            : "bg-transparent py-4"
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -45,7 +50,9 @@ export default function Navbar(): JSX.Element {
               <div className="h-9 w-9 relative flex-shrink-0">
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-500 rounded-lg transform rotate-45" />
                 <div className="absolute inset-1 bg-black rounded-lg flex items-center justify-center">
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 font-bold text-sm">V</span>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 font-bold text-sm">
+                    V
+                  </span>
                 </div>
               </div>
               <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-blue-400 to-teal-400">
@@ -70,7 +77,7 @@ export default function Navbar(): JSX.Element {
                 className="p-2 text-gray-300 hover:text-white rounded-lg focus:outline-none transition-colors cursor-pointer"
                 aria-label="Toggle Theme"
               >
-                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
               </button>
               <NotificationBell />
             </div>
@@ -82,7 +89,7 @@ export default function Navbar(): JSX.Element {
                 className="p-2 text-gray-300 hover:text-white rounded-lg focus:outline-none transition-colors cursor-pointer"
                 aria-label="Toggle Theme"
               >
-                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+                {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
               </button>
               <NotificationBell />
               <button
@@ -101,7 +108,10 @@ export default function Navbar(): JSX.Element {
       {/* Mobile drawer — rendered outside nav to avoid overflow clipping */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setIsMenuOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setIsMenuOpen(false)}
+          />
           <div className="absolute top-0 right-0 h-full w-72 bg-black/95 backdrop-blur-xl flex flex-col pt-20 pb-8 px-6 shadow-2xl">
             <nav className="flex flex-col gap-1">
               {NAV_LINKS.map(({ href, label, external }) => (
