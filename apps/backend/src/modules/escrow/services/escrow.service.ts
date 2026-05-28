@@ -8,7 +8,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder, MoreThan, LessThan } from 'typeorm';
 import { Escrow, EscrowStatus } from '../entities/escrow.entity';
 import { Party, PartyRole } from '../entities/party.entity';
 import { Condition } from '../entities/condition.entity';
@@ -945,6 +945,8 @@ export class EscrowService {
     total: number;
     page: number;
     limit: number;
+    nextCursor?: string;
+    prevCursor?: string;
   }> {
     const page = query.page || 1;
     const limit = query.limit || 10;
@@ -989,10 +991,59 @@ export class EscrowService {
       });
     }
 
+    // Cursor-based pagination for incremental sync
+    if (query.after) {
+      qb.andWhere('event.cursor > :after', { after: query.after });
+    }
+
+    if (query.before) {
+      qb.andWhere('event.cursor < :before', { before: query.before });
+    }
+
+    // Default to cursor-based ordering if using cursor pagination
+    const sortBy = query.after || query.before ? 'cursor' : (query.sortBy || 'createdAt');
     const sortOrder = query.sortOrder === EventSortOrder.ASC ? 'ASC' : 'DESC';
-    qb.orderBy(`event.${query.sortBy || 'createdAt'}`, sortOrder);
+    qb.orderBy(`event.${sortBy}`, sortOrder);
 
     const [events, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    // Calculate next/prev cursors for incremental sync
+    let nextCursor: string | undefined;
+    let prevCursor: string | undefined;
+
+    if (events.length > 0) {
+      const lastCursor = events[events.length - 1].cursor;
+      const firstCursor = events[0].cursor;
+
+      // Check if there are more events after the current page
+      if (sortOrder === 'ASC') {
+        const nextEvents = await this.eventRepository.count({
+          where: { cursor: MoreThan(lastCursor) },
+        });
+        if (nextEvents > 0) {
+          nextCursor = lastCursor;
+        }
+        const prevEvents = await this.eventRepository.count({
+          where: { cursor: LessThan(firstCursor) },
+        });
+        if (prevEvents > 0) {
+          prevCursor = firstCursor;
+        }
+      } else {
+        const nextEvents = await this.eventRepository.count({
+          where: { cursor: LessThan(lastCursor) },
+        });
+        if (nextEvents > 0) {
+          nextCursor = lastCursor;
+        }
+        const prevEvents = await this.eventRepository.count({
+          where: { cursor: MoreThan(firstCursor) },
+        });
+        if (prevEvents > 0) {
+          prevCursor = firstCursor;
+        }
+      }
+    }
 
     // Transform to response DTO
     const data: EventResponseDto[] = events.map((event) => ({
@@ -1003,6 +1054,7 @@ export class EscrowService {
       data: event.data,
       ipAddress: event.ipAddress,
       createdAt: event.createdAt,
+      cursor: event.cursor, // Include cursor in response for incremental sync
       escrow: event.escrow
         ? {
             id: event.escrow.id,
@@ -1020,7 +1072,7 @@ export class EscrowService {
         : undefined,
     }));
 
-    return { data, total, page, limit };
+    return { data, total, page, limit, nextCursor, prevCursor };
   }
 
   async fileDispute(
@@ -1394,12 +1446,22 @@ export class EscrowService {
     data?: Record<string, any>,
     ipAddress?: string,
   ): Promise<EscrowEvent> {
+    // Get the last cursor value and increment it for monotonic sequence
+    const lastEvent = await this.eventRepository.findOne({
+      where: {},
+      order: { cursor: 'DESC' },
+    });
+
+    const lastCursor = lastEvent?.cursor ? BigInt(lastEvent.cursor) : BigInt(0);
+    const nextCursor = (lastCursor + BigInt(1)).toString();
+
     const event = this.eventRepository.create({
       escrowId,
       eventType,
       actorId,
       data,
       ipAddress,
+      cursor: nextCursor,
     });
 
     return this.eventRepository.save(event);

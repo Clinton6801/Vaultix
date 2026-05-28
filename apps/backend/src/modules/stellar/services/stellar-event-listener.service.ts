@@ -303,6 +303,10 @@ export class StellarEventListenerService
     const eventType = this.mapEventType(event);
     const extractedFields = await this.extractEventFields(event, eventType);
 
+    // Compute monotonic cursor: composite of ledger and eventIndex
+    // Format: ledger * 1000 + eventIndex to ensure uniqueness within ledger
+    const cursor = (BigInt(ledger) * BigInt(1000) + BigInt(eventIndex)).toString();
+
     return this.stellarEventRepository.create({
       txHash,
       eventIndex,
@@ -319,6 +323,7 @@ export class StellarEventListenerService
       fromAddress: extractedFields.fromAddress,
       toAddress: extractedFields.toAddress,
       reason: extractedFields.reason,
+      cursor,
     });
   }
 
