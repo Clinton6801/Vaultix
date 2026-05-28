@@ -3085,6 +3085,348 @@ fn test_release_milestone_above_threshold_sufficient_signatures() {
 }
 
 #[test]
+fn test_list_escrows_by_depositor() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+    let recipient1 = Address::generate(&env);
+    let recipient2 = Address::generate(&env);
+
+    let (_token_client, _token_admin, token_address) = create_token_contract(&env, &admin);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 5000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    // Create multiple escrows with the same depositor
+    client.create_escrow(
+        &1u64,
+        &depositor,
+        &recipient1,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+        &valid_metadata_hash(&env),
+    );
+
+    client.create_escrow(
+        &2u64,
+        &depositor,
+        &recipient2,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+        &valid_metadata_hash(&env),
+    );
+
+    // List escrows by depositor
+    let summaries = client.list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &0u32,
+        &10u32,
+    );
+
+    assert_eq!(summaries.len(), 2);
+    assert_eq!(summaries.get(0).unwrap().escrow_id, 1);
+    assert_eq!(summaries.get(1).unwrap().escrow_id, 2);
+}
+
+#[test]
+fn test_list_escrows_by_recipient() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let admin = Address::generate(&env);
+    let depositor1 = Address::generate(&env);
+    let depositor2 = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let (_token_client, _token_admin, token_address) = create_token_contract(&env, &admin);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 5000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    // Create multiple escrows with the same recipient
+    client.create_escrow(
+        &1u64,
+        &depositor1,
+        &recipient,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+        &valid_metadata_hash(&env),
+    );
+
+    client.create_escrow(
+        &2u64,
+        &depositor2,
+        &recipient,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+        &valid_metadata_hash(&env),
+    );
+
+    // List escrows by recipient
+    let summaries = client.list_escrows_by_party(
+        &recipient,
+        &symbol_short!("recipient"),
+        &0u32,
+        &10u32,
+    );
+
+    assert_eq!(summaries.len(), 2);
+    assert_eq!(summaries.get(0).unwrap().escrow_id, 1);
+    assert_eq!(summaries.get(1).unwrap().escrow_id, 2);
+}
+
+#[test]
+fn test_list_escrows_pagination() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let (_token_client, _token_admin, token_address) = create_token_contract(&env, &admin);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 5000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    // Create 5 escrows
+    for i in 1..=5 {
+        client.create_escrow(
+            &i,
+            &depositor,
+            &recipient,
+            &token_address,
+            &milestones,
+            &1706400000u64,
+            &valid_metadata_hash(&env),
+        );
+    }
+
+    // Test page 0 with page size 2
+    let page0 = client.list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &0u32,
+        &2u32,
+    );
+    assert_eq!(page0.len(), 2);
+    assert_eq!(page0.get(0).unwrap().escrow_id, 1);
+    assert_eq!(page0.get(1).unwrap().escrow_id, 2);
+
+    // Test page 1 with page size 2
+    let page1 = client.list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &1u32,
+        &2u32,
+    );
+    assert_eq!(page1.len(), 2);
+    assert_eq!(page1.get(0).unwrap().escrow_id, 3);
+    assert_eq!(page1.get(1).unwrap().escrow_id, 4);
+
+    // Test page 2 with page size 2 (should have 1 result)
+    let page2 = client.list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &2u32,
+        &2u32,
+    );
+    assert_eq!(page2.len(), 1);
+    assert_eq!(page2.get(0).unwrap().escrow_id, 5);
+
+    // Test page 3 with page size 2 (should be empty)
+    let page3 = client.list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &3u32,
+        &2u32,
+    );
+    assert_eq!(page3.len(), 0);
+}
+
+#[test]
+fn test_list_escrows_page_size_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let _admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+    let _recipient = Address::generate(&env);
+
+    // Test page size exceeding MAX_PAGE_SIZE
+    let result = client.try_list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &0u32,
+        &101u32, // Exceeds MAX_PAGE_SIZE of 100
+    );
+    assert_eq!(result, Err(Ok(Error::VectorTooLarge)));
+
+    // Test page size of 0
+    let result = client.try_list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &0u32,
+        &0u32,
+    );
+    assert_eq!(result, Err(Ok(Error::VectorTooLarge)));
+}
+
+#[test]
+fn test_list_escrows_invalid_role() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let _admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+
+    // Test invalid role parameter
+    let result = client.try_list_escrows_by_party(
+        &depositor,
+        &symbol_short!("invalid"),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
+}
+
+#[test]
+fn test_list_escrows_empty_party() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let _admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+
+    // Query for a party with no escrows
+    let summaries = client.list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &0u32,
+        &10u32,
+    );
+    assert_eq!(summaries.len(), 0);
+}
+
+#[test]
+fn test_list_escrows_returns_lightweight_summaries() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let admin = Address::generate(&env);
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    let (_token_client, _token_admin, token_address) = create_token_contract(&env, &admin);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 5000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Task"),
+        },
+    ];
+
+    client.create_escrow(
+        &1u64,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+        &valid_metadata_hash(&env),
+    );
+
+    let summaries = client.list_escrows_by_party(
+        &depositor,
+        &symbol_short!("depositor"),
+        &0u32,
+        &10u32,
+    );
+
+    assert_eq!(summaries.len(), 1);
+    let summary = summaries.get(0).unwrap();
+
+    // Verify summary contains lightweight data
+    assert_eq!(summary.escrow_id, 1);
+    assert_eq!(summary.depositor, depositor);
+    assert_eq!(summary.recipient, recipient);
+    assert_eq!(summary.token_address, token_address);
+    assert_eq!(summary.total_amount, 5000);
+    assert_eq!(summary.status, EscrowStatus::Created);
+    assert_eq!(summary.deadline, 1706400000);
+    assert_eq!(summary.metadata_hash, valid_metadata_hash(&env));
+}
+
+#[test]
 fn test_max_fee_10000_bps_valid() {
     let env = Env::default();
     env.mock_all_auths();
