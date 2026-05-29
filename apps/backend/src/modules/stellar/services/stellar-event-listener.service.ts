@@ -305,7 +305,10 @@ export class StellarEventListenerService
 
     // Compute monotonic cursor: composite of ledger and eventIndex
     // Format: ledger * 1000 + eventIndex to ensure uniqueness within ledger
-    const cursor = (BigInt(ledger) * BigInt(1000) + BigInt(eventIndex)).toString();
+    const cursor = (
+      BigInt(ledger) * BigInt(1000) +
+      BigInt(eventIndex)
+    ).toString();
 
     return this.stellarEventRepository.create({
       txHash,

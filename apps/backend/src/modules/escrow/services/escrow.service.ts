@@ -8,7 +8,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository, SelectQueryBuilder, MoreThan, LessThan } from 'typeorm';
+import {
+  Brackets,
+  Repository,
+  SelectQueryBuilder,
+  MoreThan,
+  LessThan,
+} from 'typeorm';
 import { Escrow, EscrowStatus } from '../entities/escrow.entity';
 import { Party, PartyRole } from '../entities/party.entity';
 import { Condition } from '../entities/condition.entity';
@@ -1001,7 +1007,8 @@ export class EscrowService {
     }
 
     // Default to cursor-based ordering if using cursor pagination
-    const sortBy = query.after || query.before ? 'cursor' : (query.sortBy || 'createdAt');
+    const sortBy =
+      query.after || query.before ? 'cursor' : query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder === EventSortOrder.ASC ? 'ASC' : 'DESC';
     qb.orderBy(`event.${sortBy}`, sortOrder);
 

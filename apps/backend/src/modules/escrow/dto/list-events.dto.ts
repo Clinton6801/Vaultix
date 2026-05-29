@@ -7,7 +7,6 @@ import {
   IsEnum,
   IsDateString,
   IsUUID,
-  IsNumberString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { EscrowEventType } from '../entities/escrow-event.entity';
