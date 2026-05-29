@@ -1,7 +1,8 @@
 /**
- * Basic unit tests for mobile escrow screens
+ * Basic unit tests for mobile API services
  */
 import { escrowApi } from '../services/api';
+import { notificationApi } from '../services/api';
 
 // Mock axios
 jest.mock('axios', () => ({
@@ -19,6 +20,14 @@ describe('escrowApi', () => {
     expect(typeof escrowApi.create).toBe('function');
     expect(typeof escrowApi.releaseMilestone).toBe('function');
     expect(typeof escrowApi.getTxStatus).toBe('function');
+  });
+});
+
+describe('notificationApi', () => {
+  it('exports list, getUnreadCount, markAsRead', () => {
+    expect(typeof notificationApi.list).toBe('function');
+    expect(typeof notificationApi.getUnreadCount).toBe('function');
+    expect(typeof notificationApi.markAsRead).toBe('function');
   });
 });
 

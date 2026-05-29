@@ -86,6 +86,25 @@ function TimelineItem({ event }: { event: EscrowEvent }) {
   );
 }
 
+function DetailSkeleton() {
+  return (
+    <View style={styles.container}>
+      <View style={styles.content}>
+        <View style={styles.skeletonHeader} />
+        <View style={styles.skeletonLine} />
+        <View style={[styles.skeletonLine, { width: '60%' }]} />
+        <View style={styles.skeletonRow}>
+          <View style={styles.skeletonBox} />
+          <View style={styles.skeletonBox} />
+        </View>
+        <View style={styles.skeletonSection} />
+        <View style={styles.skeletonCard} />
+        <View style={styles.skeletonCard} />
+      </View>
+    </View>
+  );
+}
+
 export default function EscrowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -113,7 +132,7 @@ export default function EscrowDetailScreen() {
   }, [id, router]);
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#6c63ff" /></View>;
+    return <DetailSkeleton />;
   }
   if (error || !escrow) {
     return (
@@ -248,4 +267,11 @@ const styles = StyleSheet.create({
   errorText: { color: '#ef476f', fontSize: 15, marginBottom: 16 },
   retryBtn: { backgroundColor: '#6c63ff', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
   retryText: { color: '#fff', fontWeight: '600' },
+  // Skeleton styles
+  skeletonHeader: { height: 24, backgroundColor: '#2d2d44', borderRadius: 6, marginBottom: 12, width: '70%' },
+  skeletonLine: { height: 14, backgroundColor: '#2d2d44', borderRadius: 4, marginBottom: 8, width: '90%' },
+  skeletonRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  skeletonBox: { flex: 1, height: 60, backgroundColor: '#2d2d44', borderRadius: 10 },
+  skeletonSection: { height: 14, backgroundColor: '#2d2d44', borderRadius: 4, marginTop: 20, marginBottom: 12, width: '40%' },
+  skeletonCard: { height: 48, backgroundColor: '#2d2d44', borderRadius: 10, marginBottom: 8 },
 });

@@ -6,6 +6,7 @@ import {
   CreateEscrowPayload,
   ReleaseMilestonePayload,
 } from '../types/escrow';
+import { Notification, NotificationsResponse } from '../types/notification';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
 
@@ -65,5 +66,24 @@ export const escrowApi = {
       `/api/transactions/${txHash}/status`,
     );
     return data;
+  },
+};
+
+export const notificationApi = {
+  /** Fetch user notifications */
+  list: async (): Promise<NotificationsResponse> => {
+    const { data } = await api.get<NotificationsResponse>('/api/notifications');
+    return data;
+  },
+
+  /** Get unread notification count */
+  getUnreadCount: async (): Promise<number> => {
+    const { data } = await api.get<number>('/api/notifications/unread-count');
+    return data;
+  },
+
+  /** Mark notification(s) as read */
+  markAsRead: async (notificationId?: string): Promise<void> => {
+    await api.post('/api/notifications/mark-as-read', { notificationId });
   },
 };
