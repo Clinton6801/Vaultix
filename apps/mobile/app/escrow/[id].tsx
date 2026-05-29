@@ -13,6 +13,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { escrowApi } from '../../services/api';
 import { Escrow, Milestone, Party, EscrowEvent } from '../../types/escrow';
+import { useDisputes } from '../../hooks/useDisputes';
+import { RaiseDisputeModal } from '../../components/RaiseDisputeModal';
+import { DisputeDetailsCard } from '../../components/DisputeDetailsCard';
+import { ResolutionSummary } from '../../components/ResolutionSummary';
 
 // Simulated current user role – in production this comes from auth context
 const CURRENT_USER_ROLE: 'depositor' | 'recipient' | 'arbitrator' = 'depositor';
@@ -111,6 +115,8 @@ export default function EscrowDetailScreen() {
   const [escrow, setEscrow] = useState<Escrow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDisputeModalVisible, setDisputeModalVisible] = useState(false);
+  const { dispute, raiseDispute, hasActiveDispute, isSubmitting } = useDisputes();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -149,7 +155,8 @@ export default function EscrowDetailScreen() {
   // Role-gated: only depositor can release milestones when escrow is funded/confirmed
   const canReleaseMilestones =
     CURRENT_USER_ROLE === 'depositor' &&
-    ['funded', 'confirmed'].includes(escrow.status);
+    ['funded', 'confirmed'].includes(escrow.status) &&
+    !hasActiveDispute;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -173,6 +180,13 @@ export default function EscrowDetailScreen() {
           <Text style={styles.metaValue}>{new Date(escrow.deadline).toLocaleDateString()}</Text>
         </View>
       </View>
+
+      {dispute && (
+        <Section title="Dispute Information">
+          <DisputeDetailsCard status={dispute.status} reason={dispute.reason} />
+          <ResolutionSummary dispute={dispute} />
+        </Section>
+      )}
 
       {/* Milestones */}
       {escrow.milestones && escrow.milestones.length > 0 && (
@@ -214,8 +228,11 @@ export default function EscrowDetailScreen() {
             <Text style={styles.actionBtnText}>Fund Escrow</Text>
           </TouchableOpacity>
         )}
-        {['funded', 'confirmed'].includes(escrow.status) && CURRENT_USER_ROLE === 'depositor' && (
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#ef476f22', borderWidth: 1, borderColor: '#ef476f' }]}>
+        {['funded', 'confirmed'].includes(escrow.status) && CURRENT_USER_ROLE === 'depositor' && !hasActiveDispute && (
+          <TouchableOpacity 
+            style={[styles.actionBtn, { backgroundColor: '#ef476f22', borderWidth: 1, borderColor: '#ef476f' }]}
+            onPress={() => setDisputeModalVisible(true)}
+          >
             <Text style={[styles.actionBtnText, { color: '#ef476f' }]}>Raise Dispute</Text>
           </TouchableOpacity>
         )}
@@ -223,6 +240,18 @@ export default function EscrowDetailScreen() {
           <Text style={styles.noActions}>No actions available for this status.</Text>
         )}
       </Section>
+
+      <RaiseDisputeModal
+        visible={isDisputeModalVisible}
+        onClose={() => setDisputeModalVisible(false)}
+        onSubmit={async (reason, description) => {
+          const res = await raiseDispute(escrow.id, reason, description);
+          if (res.success) {
+            setDisputeModalVisible(false);
+          }
+        }}
+        isSubmitting={isSubmitting}
+      />
     </ScrollView>
   );
 }
