@@ -202,6 +202,8 @@ pub struct EscrowCreatedEvent {
     pub recipient: Address,
     pub token_address: Address,
     pub total_amount: i128,
+    pub total_released: i128,
+    pub status: EscrowStatus,
     pub deadline: u64,
     pub metadata_hash: BytesN<32>,
     pub timestamp: u64,
@@ -215,6 +217,8 @@ pub struct EscrowCreatedBatchEventItem {
     pub recipient: Address,
     pub token_address: Address,
     pub total_amount: i128,
+    pub total_released: i128,
+    pub status: EscrowStatus,
     pub deadline: u64,
     pub metadata_hash: BytesN<32>,
 }
@@ -235,6 +239,9 @@ pub struct FundsDepositedEvent {
     pub recipient: Address,
     pub token_address: Address,
     pub total_amount: i128,
+    pub status: EscrowStatus,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -250,6 +257,9 @@ pub struct MilestoneReleasedEvent {
     pub payout_amount: i128,
     pub fee_amount: i128,
     pub total_released: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -266,6 +276,9 @@ pub struct DeliveryConfirmedEvent {
     pub payout_amount: i128,
     pub fee_amount: i128,
     pub total_released: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -276,6 +289,10 @@ pub struct DisputeRaisedEvent {
     pub raised_by: Address,
     pub depositor: Address,
     pub recipient: Address,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -288,6 +305,10 @@ pub struct DisputeResolvedEvent {
     pub winner_amount: i128,
     pub other_amount: i128,
     pub resolution: Resolution,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -300,6 +321,10 @@ pub struct EscrowCancelledEvent {
     pub token_address: Address,
     pub refund_amount: i128,
     pub fee_amount: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -309,6 +334,9 @@ pub struct EscrowCompletedEvent {
     pub escrow_id: u64,
     pub completed_by: Address,
     pub total_released: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -320,6 +348,10 @@ pub struct EscrowExpiredRefundedEvent {
     pub token_address: Address,
     pub refund_amount: i128,
     pub fee_amount: i128,
+    pub status: EscrowStatus,
+    pub total_amount: i128,
+    pub total_released: i128,
+    pub deadline: u64,
     pub timestamp: u64,
 }
 
@@ -870,6 +902,8 @@ impl VaultixEscrow {
                 recipient,
                 token_address,
                 total_amount,
+                total_released: 0,
+                status: EscrowStatus::Created,
                 deadline,
                 metadata_hash,
                 timestamp: current_timestamp(&env),
@@ -976,6 +1010,8 @@ impl VaultixEscrow {
                 recipient,
                 token_address,
                 total_amount,
+                total_released: 0,
+                status: EscrowStatus::Created,
                 deadline,
                 metadata_hash: request.metadata_hash.clone(),
             });
@@ -1075,6 +1111,9 @@ impl VaultixEscrow {
                 recipient: escrow.recipient.clone(),
                 token_address: escrow.token_address.clone(),
                 total_amount: escrow.total_amount,
+                status: escrow_status(&escrow),
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1249,6 +1288,9 @@ impl VaultixEscrow {
                 payout_amount: release.payout_amount,
                 fee_amount: release.fee_amount,
                 total_released: release.total_released,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1308,6 +1350,9 @@ impl VaultixEscrow {
                 payout_amount: release.payout_amount,
                 fee_amount: release.fee_amount,
                 total_released: release.total_released,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1355,6 +1400,10 @@ impl VaultixEscrow {
                 raised_by: caller,
                 depositor: escrow.depositor.clone(),
                 recipient: escrow.recipient.clone(),
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1500,6 +1549,10 @@ impl VaultixEscrow {
                 winner_amount: amount_to_winner,
                 other_amount: amount_to_other,
                 resolution,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1572,6 +1625,10 @@ impl VaultixEscrow {
                 token_address: escrow.token_address.clone(),
                 refund_amount,
                 fee_amount,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1601,6 +1658,9 @@ impl VaultixEscrow {
                 escrow_id,
                 completed_by: escrow.depositor.clone(),
                 total_released: escrow.total_released,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                deadline: escrow.deadline,
                 timestamp: current_timestamp(&env),
             },
         );
@@ -1697,6 +1757,10 @@ impl VaultixEscrow {
                 token_address: escrow.token_address.clone(),
                 refund_amount,
                 fee_amount: platform_fee,
+                status: escrow_status(&escrow),
+                total_amount: escrow.total_amount,
+                total_released: escrow.total_released,
+                deadline: escrow.deadline,
                 timestamp: current_time,
             },
         );

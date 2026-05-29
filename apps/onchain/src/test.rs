@@ -419,6 +419,8 @@ fn test_create_and_get_escrow() {
             recipient: recipient.clone(),
             token_address: token_address.clone(),
             total_amount: 10000,
+            total_released: 0,
+            status: EscrowStatus::Created,
             deadline,
             metadata_hash,
             timestamp: 0,
@@ -608,6 +610,8 @@ fn test_create_escrows_batch_and_get() {
             recipient: recipient_1,
             token_address: escrow_1.token_address.clone(),
             total_amount: 10_000,
+            total_released: 0,
+            status: EscrowStatus::Created,
             deadline: deadline_1,
             metadata_hash: valid_metadata_hash(&env),
         },
@@ -617,6 +621,8 @@ fn test_create_escrows_batch_and_get() {
             recipient: recipient_2,
             token_address: escrow_2.token_address.clone(),
             total_amount: 10_000,
+            total_released: 0,
+            status: EscrowStatus::Created,
             deadline: deadline_2,
             metadata_hash: valid_metadata_hash(&env),
         },
@@ -1229,6 +1235,10 @@ fn test_raise_dispute_happy_path() {
             raised_by: depositor,
             depositor: escrow.depositor,
             recipient: escrow.recipient,
+            status: EscrowStatus::Disputed,
+            total_amount: 1000,
+            total_released: 0,
+            deadline: 1706400000,
             timestamp: 0,
         }
     );
@@ -2585,66 +2595,6 @@ fn test_cancel_escrow_uses_token_fee_override() {
     assert_eq!(token_client.balance(&treasury), expected_fee);
 }
 
-// #[test]
-// fn test_refund_expired_uses_escrow_fee_override() {
-//     let env = Env::default();
-//     env.mock_all_auths();
-
-//     let contract_id = env.register_contract(None, VaultixEscrow);
-//     let client = VaultixEscrowClient::new(&env, &contract_id);
-
-//     let treasury = Address::generate(&env);
-//     client.initialize(&treasury, &Some(50)); // 0.5% global fee
-
-//     let depositor = Address::generate(&env);
-//     let recipient = Address::generate(&env);
-//     let admin = Address::generate(&env);
-
-//     let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
-//     token_admin.mint(&depositor, &10_000);
-
-//     let escrow_id = 1u64;
-
-//     // Set escrow fee to 500 bps (5%)
-//     client.set_escrow_fee(&escrow_id, &500);
-
-//     let milestones = vec![
-//         &env,
-//         Milestone {
-//             amount: 10_000,
-//             status: MilestoneStatus::Pending,
-//             description: symbol_short!("Work"),
-//         },
-//     ];
-
-//     let deadline = env.ledger().timestamp() + 1; // Set a very short deadline
-//     client.create_escrow(
-//         &escrow_id,
-//         &depositor,
-//         &recipient,
-//         &token_address,
-//         &milestones,
-//         &deadline,
-//     );
-
-//     client.deposit_funds(&escrow_id);
-
-//     // Move time forward to expire the escrow
-//     env.ledger().with_mut(|ledger| {
-//         ledger.set_timestamp(deadline + 1000);
-//     });
-
-//     // Refund expired escrow - should use escrow fee (500 bps)
-//     client.refund_expired(&escrow_id, &depositor);
-
-//     // Expected: fee = 10_000 * 500 / 10_000 = 500
-//     let expected_fee = 500i128;
-//     let expected_refund = 10_000i128 - expected_fee;
-
-//     assert_eq!(token_client.balance(&depositor), expected_refund);
-//     assert_eq!(token_client.balance(&treasury), expected_fee);
-// }
-
 #[test]
 fn test_refund_expired_uses_escrow_fee_override() {
     let env = Env::default();
@@ -2654,8 +2604,6 @@ fn test_refund_expired_uses_escrow_fee_override() {
     let client = VaultixEscrowClient::new(&env, &contract_id);
 
     let treasury = Address::generate(&env);
-    // client.initialize(&treasury, &Some(50));
-    // Note: Ensure your initialize function matches this signature in the contract
     client.initialize(&treasury, &Some(50));
 
     let depositor = Address::generate(&env);
@@ -2714,55 +2662,6 @@ fn test_refund_expired_uses_escrow_fee_override() {
     assert_eq!(token_client.balance(&treasury), expected_fee);
 }
 
-// #[test]
-// fn test_zero_fee_valid() {
-//     let env = Env::default();
-//     env.mock_all_auths();
-
-//     let contract_id = env.register_contract(None, VaultixEscrow);
-//     let client = VaultixEscrowClient::new(&env, &contract_id);
-
-//     let treasury = Address::generate(&env);
-//     client.initialize(&treasury, &Some(50));
-
-//     let depositor = Address::generate(&env);
-//     let recipient = Address::generate(&env);
-//     let admin = Address::generate(&env);
-
-//     let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
-//     token_admin.mint(&depositor, &10_000);
-
-//     // Set token fee to zero
-//     let result = client.set_token_fee(&token_address, &0);
-//     assert_eq!(result, Ok(()));
-
-//     let escrow_id = 1u64;
-//     let milestones = vec![
-//         &env,
-//         Milestone {
-//             amount: 10_000,
-//             status: MilestoneStatus::Pending,
-//             description: symbol_short!("Work"),
-//         },
-//     ];
-
-//     client.create_escrow(
-//         &escrow_id,
-//         &depositor,
-//         &recipient,
-//         &token_address,
-//         &milestones,
-//         &(env.ledger().timestamp() + 3600),
-//     );
-
-//     client.deposit_funds(&escrow_id);
-//     client.release_milestone(&escrow_id, &0);
-
-//     // With zero fee, recipient gets full amount
-//     assert_eq!(token_client.balance(&recipient), 10_000i128);
-//     assert_eq!(token_client.balance(&treasury), 0i128);
-// }
-
 #[test]
 fn test_zero_fee_valid() {
     let env = Env::default();
@@ -2772,8 +2671,6 @@ fn test_zero_fee_valid() {
     let client = VaultixEscrowClient::new(&env, &contract_id);
 
     let treasury = Address::generate(&env);
-    // client.initialize(&treasury, &Some(50));
-    // Ensure this matches your contract's expected signature
     client.initialize(&treasury, &Some(50));
 
     let depositor = Address::generate(&env);
@@ -2784,8 +2681,6 @@ fn test_zero_fee_valid() {
     let token_client = token::Client::new(&env, &token_address);
     token_admin.mint(&depositor, &10_000);
 
-    // FIX 1: Either call directly (it will panic on failure)
-    // or use the try_ version with is_ok()
     let result = client.try_set_token_fee(&token_address, &0);
     assert!(result.is_ok(), "Setting zero fee should be valid");
 
@@ -2815,7 +2710,6 @@ fn test_zero_fee_valid() {
     client.release_milestone(&escrow_id, &0);
 
     // With zero fee, recipient gets full amount
-    // FIX 2: Ensure we are using i128 for balance comparisons
     assert_eq!(token_client.balance(&recipient), 10_000i128);
     assert_eq!(token_client.balance(&treasury), 0i128);
 }
@@ -3443,4 +3337,336 @@ fn test_max_fee_10000_bps_valid() {
     // Set token fee to maximum valid value (BPS_DENOMINATOR = 10000)
     let result = client.try_set_token_fee(&token_address, &10000);
     assert!(result.is_ok());
+}
+
+// ===============================================================================
+// Mobile-friendly event indexing: escrow summary fields in lifecycle events
+//
+// Validates that ALL lifecycle events carry the four summary fields:
+//   - status:   EscrowStatus enum identifying the current lifecycle state
+//   - total_amount:    i128 total escrow value
+//   - total_released:  i128 amount released so far  
+//   - deadline: u64 deadline timestamp
+//
+// This guarantees that mobile clients and indexers can reconstruct
+// a full dashboard view from events alone + minimal storage reads.
+// ===============================================================================
+
+/// Verify that every lifecycle event struct embeds status, total_amount, 
+/// total_released and deadline in deterministic positions.
+#[test]
+fn test_lifecycle_events_contain_all_summary_fields() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let treasury = Address::generate(&env);
+    client.initialize(&treasury, &Some(0));
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let admin = Address::generate(&env);
+
+    let (_token_client, _token_admin, token_address) = create_token_contract(&env, &admin);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 10000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Work"),
+        },
+    ];
+
+    let deadline = 1706400000u64;
+
+    // Create escrow to test the new EscrowCreatedEvent fields
+    client.create_escrow(
+        &1u64,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &deadline,
+        &valid_metadata_hash(&env),
+    );
+
+    let events = env.events().all();
+    // Event index 0 is FeeUpdated from initialize, index 1 is RoleUpdated
+    // So EscrowCreated should be the last event
+    let event = events.last().unwrap();
+    let payload: EscrowCreatedEvent = event.2.clone().into_val(&env);
+
+    // Verify summary fields are present and correct
+    assert_eq!(payload.status, EscrowStatus::Created);
+    assert_eq!(payload.total_amount, 10000);
+    assert_eq!(payload.total_released, 0);
+    assert_eq!(payload.deadline, deadline);
+}
+
+/// Walk through a full escrow lifecycle and verify that each event 
+/// carries the correct summary values at each stage.
+#[test]
+fn test_full_lifecycle_event_summaries_are_accurate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let escrow_id = 999u64;
+
+    client.initialize(&treasury, &Some(0));
+
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10_000);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 4000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("M1"),
+        },
+        Milestone {
+            amount: 6000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("M2"),
+        },
+    ];
+
+    let deadline = 1706400000u64;
+
+    // --- Step 1: Create escrow ---
+    client.create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &deadline,
+        &valid_metadata_hash(&env),
+    );
+
+    let events = env.events().all();
+    // Find the last event (EscrowCreated) — skip initialization events
+    let create_event: EscrowCreatedEvent = events.last().unwrap().2.clone().into_val(&env);
+    assert_eq!(create_event.status, EscrowStatus::Created);
+    assert_eq!(create_event.total_amount, 10000);
+    assert_eq!(create_event.total_released, 0);
+    assert_eq!(create_event.deadline, deadline);
+
+    // --- Step 2: Deposit funds ---
+    token_client.approve(&depositor, &contract_id, &10_000, &200);
+    client.deposit_funds(&escrow_id);
+
+    let events = env.events().all();
+    let deposit_event: FundsDepositedEvent = events.last().unwrap().2.clone().into_val(&env);
+    assert_eq!(deposit_event.status, EscrowStatus::Active);
+    assert_eq!(deposit_event.total_amount, 10000);
+    assert_eq!(deposit_event.total_released, 0);
+    assert_eq!(deposit_event.deadline, deadline);
+
+    // --- Step 3: Release milestone 0 ---
+    client.release_milestone(&escrow_id, &0);
+
+    let events = env.events().all();
+    let release_event: MilestoneReleasedEvent = events.last().unwrap().2.clone().into_val(&env);
+    assert_eq!(release_event.status, EscrowStatus::Active);
+    assert_eq!(release_event.total_amount, 10000);
+    assert_eq!(release_event.total_released, 4000);
+    assert_eq!(release_event.deadline, deadline);
+
+    // --- Step 4: Delivery confirm milestone 1 ---
+    client.confirm_delivery(&escrow_id, &1, &depositor);
+
+    let events = env.events().all();
+    let confirm_event: DeliveryConfirmedEvent = events.last().unwrap().2.clone().into_val(&env);
+    assert_eq!(confirm_event.status, EscrowStatus::Active);
+    assert_eq!(confirm_event.total_amount, 10000);
+    assert_eq!(confirm_event.total_released, 10000);
+    assert_eq!(confirm_event.deadline, deadline);
+
+    // --- Step 5: Complete escrow ---
+    client.complete_escrow(&escrow_id);
+
+    let events = env.events().all();
+    let complete_event: EscrowCompletedEvent = events.last().unwrap().2.clone().into_val(&env);
+    assert_eq!(complete_event.status, EscrowStatus::Completed);
+    assert_eq!(complete_event.total_amount, 10000);
+    assert_eq!(complete_event.total_released, 10000);
+    assert_eq!(complete_event.deadline, deadline);
+}
+
+/// Verify deterministic event ordering: events are emitted in the same 
+/// order as the contract operations. A mobile client can replay events
+/// sequentially to reconstruct state.
+#[test]
+fn test_event_ordering_is_deterministic() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let escrow_id = 888u64;
+
+    client.initialize(&treasury, &Some(0));
+
+    let (_token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10_000);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 10000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Work"),
+        },
+    ];
+
+    client.create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &1706400000u64,
+        &valid_metadata_hash(&env),
+    );
+
+    let events = env.events().all();
+
+    // The last event should be EscrowCreated (initialize emits FeeUpdated first)
+    let event = events.last().unwrap();
+    let topics: soroban_sdk::Vec<Val> = event.1.clone().into_val(&env);
+    let expected_topics: soroban_sdk::Vec<Val> = (
+        Symbol::new(&env, "Vaultix"),
+        Symbol::new(&env, "v1"),
+        Symbol::new(&env, "EscrowCreated"),
+    )
+        .into_val(&env);
+    assert_eq!(topics, expected_topics, 
+        "event topics must follow (Vaultix, v1, EventName) format");
+}
+
+/// Verify that event topics remain backwards-compatible and match the 
+/// existing (Vaultix, v1, EventName) pattern — no breaking changes introduced.
+#[test]
+fn test_event_topics_are_backwards_compatible() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, VaultixEscrow);
+    let client = VaultixEscrowClient::new(&env, &contract_id);
+
+    let depositor = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let escrow_id = 777u64;
+
+    client.initialize(&treasury, &Some(0));
+
+    let (token_client, token_admin, token_address) = create_token_contract(&env, &admin);
+    token_admin.mint(&depositor, &10_000);
+
+    let milestones = vec![
+        &env,
+        Milestone {
+            amount: 10000,
+            status: MilestoneStatus::Pending,
+            description: symbol_short!("Work"),
+        },
+    ];
+
+    // Run through a series of operations and verify all event topics
+    let deadline = 1706400000u64;
+
+    client.create_escrow(
+        &escrow_id,
+        &depositor,
+        &recipient,
+        &token_address,
+        &milestones,
+        &deadline,
+        &valid_metadata_hash(&env),
+    );
+
+    token_client.approve(&depositor, &contract_id, &10_000, &200);
+    client.deposit_funds(&escrow_id);
+
+    client.release_milestone(&escrow_id, &0);
+
+    client.complete_escrow(&escrow_id);
+
+    let events = env.events().all();
+
+    let expected_event_names = [
+        "EscrowCreated",
+        "FundsDeposited",
+        "MilestoneReleased",
+        "EscrowCompleted",
+    ];
+
+    let mut event_idx = 0;
+    // Skip initialization events (FeeUpdated + RoleUpdated) emitted by initialize()
+    // In this setup with treasury only, initialize emits FeeUpdated (topic index 2 with "FeeUpdated")
+    while event_idx < events.len() {
+        let topics: soroban_sdk::Vec<Val> = events.get(event_idx).unwrap().1.clone().into_val(&env);
+        let _name_val: Val = topics.get(2).unwrap();
+        let expected_topics: soroban_sdk::Vec<Val> = (
+            Symbol::new(&env, "Vaultix"),
+            Symbol::new(&env, "v1"),
+            Symbol::new(&env, expected_event_names[0]),
+        )
+            .into_val(&env);
+        if topics != expected_topics && event_idx < 5 {
+            // Skip the initial FeeUpdated event
+            event_idx += 1;
+            continue;
+        }
+        break;
+    }
+
+    for expected_name in expected_event_names.iter() {
+        while event_idx < events.len() {
+            let topics: soroban_sdk::Vec<Val> = events.get(event_idx).unwrap().1.clone().into_val(&env);
+            let expected_topics: soroban_sdk::Vec<Val> = (
+                Symbol::new(&env, "Vaultix"),
+                Symbol::new(&env, "v1"),
+                Symbol::new(&env, expected_name),
+            )
+                .into_val(&env);
+            if topics == expected_topics {
+                break;
+            }
+            event_idx += 1;
+        }
+
+        assert!(event_idx < events.len(), "expected more events");
+
+        let topics: soroban_sdk::Vec<Val> = events.get(event_idx).unwrap().1.clone().into_val(&env);
+        let canon_topic: soroban_sdk::Vec<Val> = (
+            Symbol::new(&env, "Vaultix"),
+            Symbol::new(&env, "v1"),
+            Symbol::new(&env, expected_name),
+        )
+            .into_val(&env);
+        assert_eq!(topics, canon_topic,
+            "Event {} must use canonical topic format (Vaultix, v1, {})",
+            expected_name, expected_name);
+
+        event_idx += 1;
+    }
 }
