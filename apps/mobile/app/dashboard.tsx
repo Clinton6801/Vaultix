@@ -15,6 +15,9 @@ import {
 import { useRouter } from 'expo-router';
 import { escrowApi } from '../services/api';
 import { Escrow, EscrowStatus } from '../types/escrow';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { toFriendlyError, isOfflineError } from '../utils/errors';
 
 const STATUS_FILTERS: Array<{ label: string; value: EscrowStatus | 'all' }> = [
   { label: 'All', value: 'all' },
@@ -68,10 +71,12 @@ export default function DashboardScreen() {
   const [activeFilter, setActiveFilter] = useState<EscrowStatus | 'all'>('all');
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<{ title: string; message: string } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasNextPage, setHasNextPage] = useState(false);
   const pageRef = useRef(1);
+  const { isOffline, markOffline, markOnline } = useNetworkStatus();
 
   const fetchEscrows = useCallback(async (status: EscrowStatus | 'all', page: number, append = false) => {
     try {
@@ -79,10 +84,14 @@ export default function DashboardScreen() {
       setEscrows((prev) => (append ? [...prev, ...res.escrows] : res.escrows));
       setHasNextPage(res.hasNextPage);
       pageRef.current = page;
-    } catch {
-      // silently fail – in production show a toast
+      setError(null);
+      markOnline();
+    } catch (err) {
+      const friendly = toFriendlyError(err);
+      setError({ title: friendly.title, message: friendly.message });
+      if (isOfflineError(err)) markOffline();
     }
-  }, []);
+  }, [markOnline, markOffline]);
 
   useEffect(() => {
     setLoading(true);
@@ -104,6 +113,8 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
+      <OfflineBanner visible={isOffline} />
+
       {/* Status filter tabs */}
       <FlatList
         horizontal
@@ -129,6 +140,15 @@ export default function DashboardScreen() {
       {loading ? (
         <View style={styles.skeletonList}>
           {[1, 2, 3, 4].map((k) => <SkeletonCard key={k} />)}
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorEmoji}>⚠️</Text>
+          <Text style={styles.errorTitle}>{error.title}</Text>
+          <Text style={styles.errorMessage}>{error.message}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={onRefresh}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -173,6 +193,12 @@ const styles = StyleSheet.create({
   cardAmount: { color: '#6c63ff', fontWeight: '700', fontSize: 18, marginBottom: 4 },
   cardMeta: { color: '#888', fontSize: 12 },
   empty: { color: '#888', textAlign: 'center', marginTop: 60, fontSize: 15 },
+  errorContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 60, paddingHorizontal: 32 },
+  errorEmoji: { fontSize: 36, marginBottom: 8 },
+  errorTitle: { color: '#ef476f', fontSize: 16, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
+  errorMessage: { color: '#aaa', fontSize: 13, textAlign: 'center', lineHeight: 18, marginBottom: 16 },
+  retryBtn: { backgroundColor: '#6c63ff', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 10 },
+  retryText: { color: '#fff', fontWeight: '600' },
   skeletonList: { padding: 16 },
   skeletonCard: { backgroundColor: '#1e1e30', borderRadius: 12, padding: 16, marginBottom: 12 },
   skeletonTitle: { height: 16, backgroundColor: '#2d2d44', borderRadius: 4, marginBottom: 10, width: '70%' },

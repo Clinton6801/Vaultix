@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { escrowApi } from '../../services/api';
+import { toFriendlyError } from '../../utils/errors';
 
 const MAX_MILESTONES = 10;
 const MIN_MILESTONES = 1;
@@ -176,8 +177,9 @@ export default function CreateEscrowScreen() {
         { text: 'View', onPress: () => router.replace({ pathname: '/escrow/[id]', params: { id: created.id } }) },
         { text: 'Dashboard', onPress: () => router.replace('/dashboard') },
       ]);
-    } catch {
-      Alert.alert('Error', 'Failed to create escrow. Please try again.');
+    } catch (err) {
+      const friendly = toFriendlyError(err);
+      Alert.alert(friendly.title, friendly.message, [{ text: 'OK' }]);
     } finally {
       setSubmitting(false);
     }

@@ -13,6 +13,9 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { escrowApi } from '../../services/api';
 import { Escrow, Milestone, Party, EscrowEvent } from '../../types/escrow';
+import { OfflineBanner } from '../../components/OfflineBanner';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { toFriendlyError, isOfflineError } from '../../utils/errors';
 
 // Simulated current user role – in production this comes from auth context
 const CURRENT_USER_ROLE: 'depositor' | 'recipient' | 'arbitrator' = 'depositor';
@@ -91,7 +94,8 @@ export default function EscrowDetailScreen() {
   const router = useRouter();
   const [escrow, setEscrow] = useState<Escrow | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ title: string; message: string } | null>(null);
+  const { isOffline, markOffline, markOnline } = useNetworkStatus();
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -99,12 +103,15 @@ export default function EscrowDetailScreen() {
       setError(null);
       const data = await escrowApi.getById(id);
       setEscrow(data);
-    } catch {
-      setError('Failed to load escrow. Please try again.');
+      markOnline();
+    } catch (err) {
+      const friendly = toFriendlyError(err);
+      setError({ title: friendly.title, message: friendly.message });
+      if (isOfflineError(err)) markOffline();
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, markOnline, markOffline]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -117,11 +124,16 @@ export default function EscrowDetailScreen() {
   }
   if (error || !escrow) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? 'Escrow not found.'}</Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={load}>
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
+      <View style={styles.root}>
+        <OfflineBanner visible={isOffline} />
+        <View style={styles.center}>
+          <Text style={styles.errorEmoji}>⚠️</Text>
+          <Text style={styles.errorTitle}>{error?.title ?? 'Not found'}</Text>
+          <Text style={styles.errorMessage}>{error?.message ?? 'Escrow not found.'}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={load}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -133,7 +145,9 @@ export default function EscrowDetailScreen() {
     ['funded', 'confirmed'].includes(escrow.status);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.root}>
+      <OfflineBanner visible={isOffline} />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{escrow.title}</Text>
@@ -204,11 +218,13 @@ export default function EscrowDetailScreen() {
           <Text style={styles.noActions}>No actions available for this status.</Text>
         )}
       </Section>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#12121f' },
   container: { flex: 1, backgroundColor: '#12121f' },
   content: { padding: 16, paddingBottom: 40 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#12121f' },
@@ -245,7 +261,9 @@ const styles = StyleSheet.create({
   actionBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
   actionBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   noActions: { color: '#888', fontSize: 13, textAlign: 'center', paddingVertical: 8 },
-  errorText: { color: '#ef476f', fontSize: 15, marginBottom: 16 },
+  errorEmoji: { fontSize: 36, marginBottom: 8 },
+  errorTitle: { color: '#ef476f', fontSize: 16, fontWeight: '700', marginBottom: 6, textAlign: 'center' },
+  errorMessage: { color: '#aaa', fontSize: 13, textAlign: 'center', lineHeight: 18, marginBottom: 16 },
   retryBtn: { backgroundColor: '#6c63ff', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
   retryText: { color: '#fff', fontWeight: '600' },
 });
