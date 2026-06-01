@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Filter, ChevronLeft, ChevronRight, Eye, RefreshCw, X,
   Loader2, AlertCircle, CheckCircle2, Clock, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { AdminService } from '@/services/admin';
+import { AdminEscrowTableSkeleton } from '@/components/ui/AdminEscrowTableSkeleton';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { IAdminEscrow, IAdminEscrowResponse } from '@/types/admin';
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: React.ElementType }> = {
@@ -139,15 +142,25 @@ function EscrowCard({ escrow, onView }: { escrow: IAdminEscrow; onView: () => vo
 }
 
 export default function AdminEscrowsPage() {
+  const router = useRouter();
+  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [data, setData] = useState<IAdminEscrowResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedEscrow, setSelectedEscrow] = useState<IAdminEscrow | null>(null);
 
+  // Redirect non-admins to dashboard
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      router.push('/dashboard');
+    }
+  }, [isAdmin, authLoading, router]);
+
   const statuses = ['ALL', 'ACTIVE', 'COMPLETED', 'PENDING', 'CANCELLED', 'DISPUTED'];
 
   const fetchEscrows = useCallback(async () => {
+    if (!isAdmin) return;
     setLoading(true);
     try {
       const result = await AdminService.getEscrows({ status: statusFilter === 'ALL' ? undefined : statusFilter, page, limit: 10 });
@@ -155,9 +168,26 @@ export default function AdminEscrowsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, isAdmin]);
 
   useEffect(() => { fetchEscrows(); }, [fetchEscrows]);
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+          <p className="text-sm text-gray-500">Verifying admin access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect guard
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <div className="space-y-5">
@@ -187,9 +217,7 @@ export default function AdminEscrowsPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
-        </div>
+        <AdminEscrowTableSkeleton />
       ) : (
         <>
           {/* Mobile card list */}

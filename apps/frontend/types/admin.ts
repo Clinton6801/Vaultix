@@ -100,3 +100,43 @@ export interface IAuditLogFilters {
   page?: number;
   pageSize?: number;
 }
+
+// Analytics types
+export interface IVolumeDataPoint {
+  label: string;
+  value: number;
+  date?: string;
+}
+
+export interface IVolumeAnalytics {
+  timeSeries: IVolumeDataPoint[];
+  totalVolume: number;
+  period: string;
+}
+
+export interface IAnalyticsOverview {
+  totalVolume: number;
+  totalEscrows: number;
+  activeUsers: number;
+  completionRate: number;
+}
+
+export interface IDisputeMetrics {
+  total: number;
+  rate: number;
+  avgResolutionHours: number;
+  releasedToSellerPct: number;
+  refundedToBuyerPct: number;
+}
+
+export interface ITopUser {
+  rank: number;
+  userId: string;
+  walletAddress: string;
+  escrowCount: number;
+  totalVolume: number;
+}
+
+export interface ITopUsersResponse {
+  users: ITopUser[];
+}
