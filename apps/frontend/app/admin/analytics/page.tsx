@@ -1,12 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { BarChart3, PieChart, TrendingUp, Users, Loader2, AlertCircle } from 'lucide-react';
-import { AdminService, AdminApiError } from '@/services/admin';
-import { AdminAnalyticsSkeleton } from '@/components/ui/AdminAnalyticsSkeleton';
-import { useAdminAuth } from '@/hooks/useAdminAuth';
-import { IPlatformStats, IVolumeAnalytics, IDisputeMetrics, ITopUsersResponse } from '@/types/admin';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, PieChart, TrendingUp, Users, Loader2 } from 'lucide-react';
+import { AdminService } from '@/services/admin';
+import { IPlatformStats } from '@/types/admin';
 
 // ── Date Range Selector ────────────────────────────────────────────────────
 
@@ -20,52 +17,22 @@ const RANGES: { label: string; value: Range }[] = [
 
 // ── Escrow Volume Bar Chart (CSS-based) ────────────────────────────────────
 
-function VolumeChart({ range, data, loading, error }: { range: Range; data: IVolumeAnalytics | null; loading: boolean; error: string | null }) {
-  if (loading) {
-    return (
-      <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-1 flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-blue-400" />
-          Escrow Creation Volume
-        </h3>
-        <div className="flex items-center justify-center h-36">
-          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-        </div>
-      </div>
-    );
-  }
+const VOLUME_DATA: Record<Range, { label: string; value: number }[]> = {
+  '7d': [
+    { label: 'Mon', value: 42 }, { label: 'Tue', value: 67 }, { label: 'Wed', value: 55 },
+    { label: 'Thu', value: 80 }, { label: 'Fri', value: 91 }, { label: 'Sat', value: 38 }, { label: 'Sun', value: 29 },
+  ],
+  '30d': [
+    { label: 'W1', value: 198 }, { label: 'W2', value: 240 }, { label: 'W3', value: 312 }, { label: 'W4', value: 278 },
+  ],
+  '90d': [
+    { label: 'Jan', value: 480 }, { label: 'Feb', value: 610 }, { label: 'Mar', value: 850 },
+  ],
+};
 
-  if (error) {
-    return (
-      <div className="bg-[#12121a] border border-red-500/20 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-red-400" />
-          Escrow Creation Volume
-        </h3>
-        <div className="flex items-center gap-2 text-red-400 text-sm">
-          <AlertCircle className="w-4 h-4" />
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (!data || !data.timeSeries || data.timeSeries.length === 0) {
-    return (
-      <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-1 flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-blue-400" />
-          Escrow Creation Volume
-        </h3>
-        <div className="flex items-center justify-center h-36 text-gray-500">
-          No data available for this period
-        </div>
-      </div>
-    );
-  }
-
-  const chartData = data.timeSeries;
-  const max = Math.max(...chartData.map((d) => d.value));
+function VolumeChart({ range }: { range: Range }) {
+  const data = VOLUME_DATA[range];
+  const max = Math.max(...data.map((d) => d.value));
 
   return (
     <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
@@ -75,8 +42,8 @@ function VolumeChart({ range, data, loading, error }: { range: Range; data: IVol
       </h3>
       <p className="text-xs text-gray-500 mb-6">Number of escrows created per period</p>
       <div className="flex items-end gap-2 h-36">
-        {chartData.map((d, i) => {
-          const pct = max > 0 ? (d.value / max) * 100 : 0;
+        {data.map((d, i) => {
+          const pct = (d.value / max) * 100;
           return (
             <div key={i} className="flex-1 flex flex-col items-center gap-1">
               <span className="text-[10px] text-gray-400">{d.value}</span>
@@ -156,56 +123,19 @@ function StatusDonut({ stats }: { stats: IPlatformStats }) {
 
 // ── Top Users Table ────────────────────────────────────────────────────────
 
-type SortKey = 'escrowCount' | 'totalVolume';
+const MOCK_TOP_USERS = Array.from({ length: 10 }, (_, i) => ({
+  rank: i + 1,
+  wallet: `G${String.fromCharCode(65 + i)}${'ABCDEFGHIJK234567'.repeat(3).slice(0, 54)}`,
+  escrows: 120 - i * 11,
+  volume: (500000 - i * 45000).toLocaleString(),
+}));
 
-function TopUsersTable({ data, loading, error }: { data: ITopUsersResponse | null; loading: boolean; error: string | null }) {
-  const [sort, setSort] = useState<SortKey>('totalVolume');
+type SortKey = 'escrows' | 'volume';
 
-  if (loading) {
-    return (
-      <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-          <Users className="w-4 h-4 text-teal-400" />
-          Top 10 Users by Volume
-        </h3>
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-[#12121a] border border-red-500/20 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-          <Users className="w-4 h-4 text-red-400" />
-          Top 10 Users by Volume
-        </h3>
-        <div className="flex items-center gap-2 text-red-400 text-sm">
-          <AlertCircle className="w-4 h-4" />
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (!data || !data.users || data.users.length === 0) {
-    return (
-      <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-          <Users className="w-4 h-4 text-teal-400" />
-          Top 10 Users by Volume
-        </h3>
-        <div className="flex items-center justify-center h-40 text-gray-500">
-          No users data available
-        </div>
-      </div>
-    );
-  }
-
-  const sorted = [...data.users].sort((a, b) =>
-    sort === 'escrowCount' ? b.escrowCount - a.escrowCount : b.totalVolume - a.totalVolume,
+function TopUsersTable() {
+  const [sort, setSort] = useState<SortKey>('escrows');
+  const sorted = [...MOCK_TOP_USERS].sort((a, b) =>
+    sort === 'escrows' ? b.escrows - a.escrows : parseInt(b.volume.replace(/,/g, '')) - parseInt(a.volume.replace(/,/g, '')),
   );
 
   const thClass = 'text-left text-xs text-gray-500 font-medium py-2 px-3 uppercase tracking-wider cursor-pointer hover:text-gray-300';
@@ -222,11 +152,11 @@ function TopUsersTable({ data, loading, error }: { data: ITopUsersResponse | nul
             <tr className="border-b border-white/5">
               <th className="text-left text-xs text-gray-500 font-medium py-2 px-3 uppercase">#</th>
               <th className="text-left text-xs text-gray-500 font-medium py-2 px-3 uppercase">Wallet</th>
-              <th className={thClass} onClick={() => setSort('escrowCount')}>
-                Escrows {sort === 'escrowCount' && '↓'}
+              <th className={thClass} onClick={() => setSort('escrows')}>
+                Escrows {sort === 'escrows' && '↓'}
               </th>
-              <th className={thClass} onClick={() => setSort('totalVolume')}>
-                Volume (XLM) {sort === 'totalVolume' && '↓'}
+              <th className={thClass} onClick={() => setSort('volume')}>
+                Volume (XLM) {sort === 'volume' && '↓'}
               </th>
             </tr>
           </thead>
@@ -235,10 +165,10 @@ function TopUsersTable({ data, loading, error }: { data: ITopUsersResponse | nul
               <tr key={u.rank} className="border-b border-white/5 hover:bg-white/[0.02]">
                 <td className="py-2 px-3 text-gray-500">{u.rank}</td>
                 <td className="py-2 px-3 font-mono text-xs text-gray-300">
-                  {u.walletAddress.slice(0, 8)}…{u.walletAddress.slice(-4)}
+                  {u.wallet.slice(0, 8)}…{u.wallet.slice(-4)}
                 </td>
-                <td className="py-2 px-3 text-gray-200">{u.escrowCount}</td>
-                <td className="py-2 px-3 text-gray-200">{u.totalVolume.toLocaleString()}</td>
+                <td className="py-2 px-3 text-gray-200">{u.escrows}</td>
+                <td className="py-2 px-3 text-gray-200">{u.volume}</td>
               </tr>
             ))}
           </tbody>
@@ -250,49 +180,10 @@ function TopUsersTable({ data, loading, error }: { data: ITopUsersResponse | nul
 
 // ── Dispute Metrics ────────────────────────────────────────────────────────
 
-function DisputeMetrics({ data, loading, error }: { data: IDisputeMetrics | null; loading: boolean; error: string | null }) {
-  if (loading) {
-    return (
-      <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-yellow-400" />
-          Dispute Metrics
-        </h3>
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-[#12121a] border border-red-500/20 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-red-400" />
-          Dispute Metrics
-        </h3>
-        <div className="flex items-center gap-2 text-red-400 text-sm">
-          <AlertCircle className="w-4 h-4" />
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-yellow-400" />
-          Dispute Metrics
-        </h3>
-        <div className="flex items-center justify-center h-40 text-gray-500">
-          No dispute data available
-        </div>
-      </div>
-    );
-  }
+function DisputeMetrics({ stats }: { stats: IPlatformStats }) {
+  const total = stats.escrows.total || 1;
+  const disputed = Math.round(total * 0.03);
+  const disputeRate = ((disputed / total) * 100).toFixed(1);
 
   return (
     <div className="bg-[#12121a] border border-white/5 rounded-xl p-6">
@@ -302,19 +193,19 @@ function DisputeMetrics({ data, loading, error }: { data: IDisputeMetrics | null
       </h3>
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white/[0.02] rounded-lg p-4">
-          <p className="text-2xl font-bold text-yellow-400">{(data.rate * 100).toFixed(1)}%</p>
+          <p className="text-2xl font-bold text-yellow-400">{disputeRate}%</p>
           <p className="text-xs text-gray-500 mt-1">Dispute rate</p>
         </div>
         <div className="bg-white/[0.02] rounded-lg p-4">
-          <p className="text-2xl font-bold text-white">{data.avgResolutionHours}h</p>
+          <p className="text-2xl font-bold text-white">48h</p>
           <p className="text-xs text-gray-500 mt-1">Avg resolution time</p>
         </div>
         <div className="bg-white/[0.02] rounded-lg p-4">
-          <p className="text-2xl font-bold text-green-400">{(data.releasedToSellerPct * 100).toFixed(0)}%</p>
+          <p className="text-2xl font-bold text-green-400">62%</p>
           <p className="text-xs text-gray-500 mt-1">Released to seller</p>
         </div>
         <div className="bg-white/[0.02] rounded-lg p-4">
-          <p className="text-2xl font-bold text-blue-400">{(data.refundedToBuyerPct * 100).toFixed(0)}%</p>
+          <p className="text-2xl font-bold text-blue-400">31%</p>
           <p className="text-xs text-gray-500 mt-1">Refunded to buyer</p>
         </div>
       </div>
@@ -325,68 +216,17 @@ function DisputeMetrics({ data, loading, error }: { data: IDisputeMetrics | null
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function AdminAnalyticsPage() {
-  const router = useRouter();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
-  
   const [stats, setStats] = useState<IPlatformStats | null>(null);
-  const [volumeData, setVolumeData] = useState<IVolumeAnalytics | null>(null);
-  const [disputeMetrics, setDisputeMetrics] = useState<IDisputeMetrics | null>(null);
-  const [topUsers, setTopUsers] = useState<ITopUsersResponse | null>(null);
-  
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>('30d');
-  
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Redirect non-admins to dashboard
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push('/dashboard');
-    }
-  }, [isAdmin, authLoading, router]);
-
-  const fetchData = useCallback(async (period: Range) => {
-    if (!isAdmin) return;
-    
-    setLoading(true);
-    setErrors({});
-    try {
-      const [s, v, d, u] = await Promise.all([
-        AdminService.getStats().catch((err) => {
-          setErrors((prev) => ({ ...prev, stats: err instanceof AdminApiError ? err.message : 'Failed to load stats' }));
-          return null;
-        }),
-        AdminService.getVolumeAnalytics(period).catch((err) => {
-          setErrors((prev) => ({ ...prev, volume: err instanceof AdminApiError ? err.message : 'Failed to load volume data' }));
-          return null;
-        }),
-        AdminService.getDisputeMetrics().catch((err) => {
-          setErrors((prev) => ({ ...prev, disputes: err instanceof AdminApiError ? err.message : 'Failed to load dispute metrics' }));
-          return null;
-        }),
-        AdminService.getTopUsers(10).catch((err) => {
-          setErrors((prev) => ({ ...prev, users: err instanceof AdminApiError ? err.message : 'Failed to load top users' }));
-          return null;
-        }),
-      ]);
-      
-      setStats(s);
-      setVolumeData(v);
-      setDisputeMetrics(d);
-      setTopUsers(u);
-    } catch (err) {
-      console.error('Failed to fetch analytics data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [isAdmin]);
 
   useEffect(() => {
-    fetchData(range);
-  }, [range, fetchData]);
+    AdminService.getStats()
+      .then(setStats)
+      .finally(() => setLoading(false));
+  }, []);
 
-  // Show loading while checking auth
-  if (authLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
@@ -394,14 +234,7 @@ export default function AdminAnalyticsPage() {
     );
   }
 
-  // Redirect guard
-  if (!isAdmin) {
-    return null;
-  }
-
-  if (loading && !stats) {
-    return <AdminAnalyticsSkeleton />;
-  }
+  if (!stats) return null;
 
   return (
     <div className="space-y-6">
@@ -416,8 +249,7 @@ export default function AdminAnalyticsPage() {
             <button
               key={r.value}
               onClick={() => setRange(r.value)}
-              disabled={loading}
-              className={`px-3 py-1 text-sm rounded-md transition-colors disabled:opacity-50 ${
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
                 range === r.value
                   ? 'bg-white/10 text-white font-medium'
                   : 'text-gray-400 hover:text-white'
@@ -431,14 +263,14 @@ export default function AdminAnalyticsPage() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <VolumeChart range={range} data={volumeData} loading={loading} error={errors.volume || null} />
-        {stats && <StatusDonut stats={stats} />}
+        <VolumeChart range={range} />
+        <StatusDonut stats={stats} />
       </div>
 
       {/* Dispute metrics + Top users */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DisputeMetrics data={disputeMetrics} loading={loading} error={errors.disputes || null} />
-        <TopUsersTable data={topUsers} loading={loading} error={errors.users || null} />
+        <DisputeMetrics stats={stats} />
+        <TopUsersTable />
       </div>
     </div>
   );

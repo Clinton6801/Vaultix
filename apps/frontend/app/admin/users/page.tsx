@@ -1,14 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Users, Search, ChevronLeft, ChevronRight,
   UserX, UserCheck, Loader2, Shield, X, AlertTriangle,
 } from 'lucide-react';
 import { AdminService } from '@/services/admin';
-import { AdminUserTableSkeleton } from '@/components/ui/AdminUserTableSkeleton';
-import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { IAdminUser, IAdminUserResponse } from '@/types/admin';
 
 function RoleBadge({ role }: { role: string }) {
@@ -112,8 +109,6 @@ function UserCard({ user, onAction }: { user: IAdminUser; onAction: (u: IAdminUs
 }
 
 export default function AdminUsersPage() {
-  const router = useRouter();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [data, setData] = useState<IAdminUserResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -121,15 +116,7 @@ export default function AdminUsersPage() {
   const [confirmUser, setConfirmUser] = useState<IAdminUser | null>(null);
   const [suspending, setSuspending] = useState(false);
 
-  // Redirect non-admins to dashboard
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push('/dashboard');
-    }
-  }, [isAdmin, authLoading, router]);
-
   const fetchUsers = useCallback(async () => {
-    if (!isAdmin) return;
     setLoading(true);
     try {
       const result = await AdminService.getUsers(page, 15, search || undefined);
@@ -137,7 +124,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, isAdmin]);
+  }, [page, search]);
 
   useEffect(() => {
     const timer = setTimeout(fetchUsers, 300);
@@ -155,23 +142,6 @@ export default function AdminUsersPage() {
       setSuspending(false);
     }
   };
-
-  // Show loading while checking auth
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-          <p className="text-sm text-gray-500">Verifying admin access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect guard
-  if (!isAdmin) {
-    return null;
-  }
 
   return (
     <div className="space-y-5">
@@ -193,7 +163,9 @@ export default function AdminUsersPage() {
       </div>
 
       {loading ? (
-        <AdminUserTableSkeleton />
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
+        </div>
       ) : (
         <>
           {/* Mobile card list */}

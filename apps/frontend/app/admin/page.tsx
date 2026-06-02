@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Users,
   Shield,
@@ -16,8 +15,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import { AdminService } from '@/services/admin';
-import { AdminStatsSkeleton } from '@/components/ui/AdminStatsSkeleton';
-import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { IPlatformStats } from '@/types/admin';
 
 function StatCard({
@@ -196,45 +193,24 @@ function RecentActivity() {
 }
 
 export default function AdminOverviewPage() {
-  const router = useRouter();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [stats, setStats] = useState<IPlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Redirect non-admins to dashboard
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push('/dashboard');
-    }
-  }, [isAdmin, authLoading, router]);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    
     AdminService.getStats()
       .then(setStats)
       .finally(() => setLoading(false));
-  }, [isAdmin]);
+  }, []);
 
-  // Show loading while checking auth
-  if (authLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-          <p className="text-sm text-gray-500">Verifying admin access...</p>
+          <p className="text-sm text-gray-500">Loading dashboard...</p>
         </div>
       </div>
     );
-  }
-
-  // Redirect guard
-  if (!isAdmin) {
-    return null;
-  }
-
-  if (loading) {
-    return <AdminStatsSkeleton />;
   }
 
   if (!stats) return null;

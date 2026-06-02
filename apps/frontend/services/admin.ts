@@ -6,187 +6,150 @@ import {
   IAdminEscrowFilters,
   IAuditLogFilters,
   IAdminUser,
+  IAdminEscrow,
+  IAuditLog,
 } from '@/types/admin';
 
-// ── Auth helper ────────────────────────────────────────────────────────────
-// Swap this out if your token lives somewhere else (e.g. Zustand, cookie, etc.)
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token');
-}
+// Mock data for admin dashboard
 
-// ── Base fetch wrapper ─────────────────────────────────────────────────────
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+const MOCK_STATS: IPlatformStats = {
+  users: { total: 1284, active: 1102, newLast30Days: 87 },
+  escrows: {
+    total: 3452,
+    active: 412,
+    completed: 2891,
+    newLast30Days: 198,
+    completedLast30Days: 167,
+  },
+  volume: { totalCompleted: 4285000 },
+  roles: { USER: 1240, ADMIN: 38, SUPER_ADMIN: 6 },
+};
 
-class AdminApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = 'AdminApiError';
-  }
-}
+const MOCK_USERS: IAdminUser[] = Array.from({ length: 50 }, (_, i) => ({
+  id: `user-${i + 1}`,
+  walletAddress: `G${String.fromCharCode(65 + (i % 26))}${'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.slice(0, 55)}`,
+  role: i < 2 ? 'SUPER_ADMIN' as const : i < 6 ? 'ADMIN' as const : 'USER' as const,
+  isActive: i !== 7 && i !== 15,
+  createdAt: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
+  updatedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+}));
 
-async function adminFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getAuthToken();
+const ESCROW_STATUSES = ['ACTIVE', 'COMPLETED', 'CANCELLED', 'DISPUTED', 'PENDING'];
+const ESCROW_TYPES = ['STANDARD', 'MILESTONE', 'TIMED'];
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+const MOCK_ADMIN_ESCROWS: IAdminEscrow[] = Array.from({ length: 40 }, (_, i) => ({
+  id: `escrow-${i + 1}`,
+  title: [
+    'Website Development', 'Smart Contract Audit', 'Brand Design Package',
+    'API Integration', 'DeFi Protocol Development', 'Mobile App MVP',
+    'Content Strategy', 'Security Review', 'Logo & Branding', 'Data Migration',
+  ][i % 10],
+  description: 'Lorem ipsum dolor sit amet',
+  amount: String(Math.floor(Math.random() * 50000) + 100),
+  asset: 'XLM',
+  status: ESCROW_STATUSES[i % ESCROW_STATUSES.length],
+  type: ESCROW_TYPES[i % ESCROW_TYPES.length],
+  createdAt: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
+  updatedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+  expiresAt: new Date(Date.now() + Math.random() * 60 * 24 * 60 * 60 * 1000).toISOString(),
+  isActive: i % 5 !== 4,
+  parties: [
+    { id: `p-${i}-1`, userId: `user-${(i % 20) + 1}`, role: 'BUYER', status: 'ACCEPTED' },
+    { id: `p-${i}-2`, userId: `user-${(i % 20) + 2}`, role: 'SELLER', status: 'ACCEPTED' },
+  ],
+}));
 
-  if (res.status === 401) {
-    throw new AdminApiError(401, 'Unauthorized — please log in again.');
-  }
+const ACTION_TYPES = ['SUSPEND_USER', 'CREATE_ESCROW', 'UPDATE_ESCROW', 'CONSISTENCY_CHECK', 'LOGIN', 'ROLE_CHANGE'];
+const RESOURCE_TYPES = ['USER', 'ESCROW', 'SYSTEM'];
 
-  if (res.status === 403) {
-    throw new AdminApiError(403, 'Access denied — admin role required.');
-  }
+const MOCK_AUDIT_LOGS: IAuditLog[] = Array.from({ length: 80 }, (_, i) => ({
+  id: `log-${i + 1}`,
+  actorId: `user-${(i % 6) + 1}`,
+  actionType: ACTION_TYPES[i % ACTION_TYPES.length],
+  resourceType: RESOURCE_TYPES[i % RESOURCE_TYPES.length],
+  resourceId: i % 3 === 0 ? null : `resource-${i}`,
+  metadata: { detail: `Action detail ${i + 1}` },
+  createdAt: new Date(Date.now() - i * 3600 * 1000).toISOString(),
+}));
 
-  if (!res.ok) {
-    let message = `Request failed with status ${res.status}`;
-    try {
-      const body = await res.json();
-      message = body?.message ?? message;
-    } catch {
-      // ignore parse errors
-    }
-    throw new AdminApiError(res.status, message);
-  }
-
-  return res.json() as Promise<T>;
-}
-
-// ── Analytics types ────────────────────────────────────────────────────────
-
-export interface IAnalyticsOverview {
-  totalVolume: number;
-  totalEscrows: number;
-  activeUsers: number;
-  completionRate: number;
-}
-
-export interface IVolumeDataPoint {
-  label: string;
-  value: number;
-  date?: string;
-}
-
-export interface IVolumeAnalytics {
-  timeSeries: IVolumeDataPoint[];
-  totalVolume: number;
-  period: string;
-}
-
-export interface IDisputeMetrics {
-  total: number;
-  rate: number;
-  avgResolutionHours: number;
-  releasedToSellerPct: number;
-  refundedToBuyerPct: number;
-}
-
-export interface ITopUser {
-  rank: number;
-  userId: string;
-  walletAddress: string;
-  escrowCount: number;
-  totalVolume: number;
-}
-
-export interface ITopUsersResponse {
-  users: ITopUser[];
-}
-
-// ── AdminService ───────────────────────────────────────────────────────────
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export class AdminService {
-  // ── Stats ────────────────────────────────────────────────────────────────
-
   static async getStats(): Promise<IPlatformStats> {
-    return adminFetch<IPlatformStats>('/admin/stats');
+    await delay(600);
+    return { ...MOCK_STATS };
   }
 
-  // ── Analytics ────────────────────────────────────────────────────────────
+  static async getUsers(page: number = 1, limit: number = 20, search?: string): Promise<IAdminUserResponse> {
+    await delay(500);
+    let users = [...MOCK_USERS];
 
-  static async getAnalyticsOverview(): Promise<IAnalyticsOverview> {
-    return adminFetch<IAnalyticsOverview>('/admin/analytics/overview');
+    if (search) {
+      const term = search.toLowerCase();
+      users = users.filter(u =>
+        u.walletAddress.toLowerCase().includes(term) ||
+        u.id.toLowerCase().includes(term)
+      );
+    }
+
+    const total = users.length;
+    const start = (page - 1) * limit;
+    const paginatedUsers = users.slice(start, start + limit);
+
+    return {
+      users: paginatedUsers,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    };
   }
 
-  static async getVolumeAnalytics(period: '7d' | '30d' | '90d' = '30d'): Promise<IVolumeAnalytics> {
-    return adminFetch<IVolumeAnalytics>(`/admin/analytics/volume?period=${period}`);
+  static async getEscrows(filters: IAdminEscrowFilters = {}): Promise<IAdminEscrowResponse> {
+    await delay(500);
+    const { status, page = 1, limit = 20 } = filters;
+    let escrows = [...MOCK_ADMIN_ESCROWS];
+
+    if (status && status !== 'ALL') {
+      escrows = escrows.filter(e => e.status === status);
+    }
+
+    const total = escrows.length;
+    const start = (page - 1) * limit;
+    const paginatedEscrows = escrows.slice(start, start + limit);
+
+    return {
+      escrows: paginatedEscrows,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    };
   }
 
-  static async getDisputeMetrics(): Promise<IDisputeMetrics> {
-    return adminFetch<IDisputeMetrics>('/admin/analytics/disputes');
-  }
+  static async getAuditLogs(filters: IAuditLogFilters = {}): Promise<IAuditLogResponse> {
+    await delay(500);
+    const { actorId, actionType, resourceType, page = 1, pageSize = 20 } = filters;
+    let logs = [...MOCK_AUDIT_LOGS];
 
-  static async getTopUsers(limit: number = 10): Promise<ITopUsersResponse> {
-    return adminFetch<ITopUsersResponse>(`/admin/analytics/top-users?limit=${limit}`);
-  }
+    if (actorId) logs = logs.filter(l => l.actorId === actorId);
+    if (actionType) logs = logs.filter(l => l.actionType === actionType);
+    if (resourceType) logs = logs.filter(l => l.resourceType === resourceType);
 
-  // ── Users ─────────────────────────────────────────────────────────────────
+    const total = logs.length;
+    const start = (page - 1) * pageSize;
+    const paginatedLogs = logs.slice(start, start + pageSize);
 
-  static async getUsers(
-    page: number = 1,
-    limit: number = 20,
-    search?: string,
-  ): Promise<IAdminUserResponse> {
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-      ...(search ? { search } : {}),
-    });
-    return adminFetch<IAdminUserResponse>(`/admin/users?${params}`);
+    return { data: paginatedLogs, total };
   }
 
   static async suspendUser(userId: string): Promise<{ message: string; user: IAdminUser }> {
-    return adminFetch<{ message: string; user: IAdminUser }>(
-      `/admin/users/${userId}/suspend`,
-      { method: 'POST' },
-    );
-  }
-
-  // ── Escrows ───────────────────────────────────────────────────────────────
-
-  static async getEscrows(filters: IAdminEscrowFilters = {}): Promise<IAdminEscrowResponse> {
-    const { status, page = 1, limit = 20 } = filters;
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-      ...(status && status !== 'ALL' ? { status } : {}),
-    });
-    return adminFetch<IAdminEscrowResponse>(`/admin/escrows?${params}`);
+    await delay(800);
+    const user = MOCK_USERS.find(u => u.id === userId);
+    if (!user) throw new Error('User not found');
+    const updated = { ...user, isActive: !user.isActive };
+    return { message: `User ${updated.isActive ? 'unsuspended' : 'suspended'} successfully`, user: updated };
   }
 
   static async runConsistencyCheck(escrowId: string): Promise<{ status: string; issues: string[] }> {
-    return adminFetch<{ status: string; issues: string[] }>(
-      `/admin/escrows/consistency-check`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ escrowId }),
-      },
-    );
-  }
-
-  // ── Audit Logs ────────────────────────────────────────────────────────────
-
-  static async getAuditLogs(filters: IAuditLogFilters = {}): Promise<IAuditLogResponse> {
-    const { actorId, actionType, resourceType, from, to, page = 1, pageSize = 20 } = filters;
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-      ...(actorId ? { actorId } : {}),
-      ...(actionType ? { actionType } : {}),
-      ...(resourceType ? { resourceType } : {}),
-      ...(from ? { from } : {}),
-      ...(to ? { to } : {}),
-    });
-    return adminFetch<IAuditLogResponse>(`/admin/audit-logs?${params}`);
+    await delay(1200);
+    return {
+      status: 'completed',
+      issues: Math.random() > 0.5 ? [] : ['Minor state mismatch detected'],
+    };
   }
 }
-
-// ── Re-export error class so pages can instanceof-check it ─────────────────
-export { AdminApiError };

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, In, IsNull, Between } from 'typeorm';
+import { Repository, LessThan, In, IsNull } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Escrow, EscrowStatus } from '../entities/escrow.entity';
 import { EscrowEvent, EscrowEventType } from '../entities/escrow-event.entity';
@@ -98,13 +98,17 @@ export class EscrowSchedulerService {
   }
 
   private async processExpirationWarnings() {
-    const now = new Date();
-    const warningThreshold = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const warningThreshold = new Date();
+    warningThreshold.setDate(warningThreshold.getDate() + 1);
+    warningThreshold.setHours(0, 0, 0, 0);
 
     const escrowsNeedingWarning = await this.escrowRepository.find({
       where: {
         status: In([EscrowStatus.PENDING, EscrowStatus.ACTIVE]),
-        expiresAt: Between(now, warningThreshold),
+        expiresAt: LessThan(warningThreshold),
         expirationNotifiedAt: IsNull(),
         isActive: true,
       },
@@ -130,7 +134,15 @@ export class EscrowSchedulerService {
   private async autoCancelEscrow(escrow: Escrow) {
     this.logger.log(`Auto-expiring pending escrow: ${escrow.id}`);
 
-    await this.escrowService.expireBySystem(escrow.id, 'EXPIRED_PENDING');
+    const expiredEscrow = await this.escrowService.expireBySystem(
+      escrow.id,
+      'EXPIRED_PENDING',
+    );
+
+    void this.notifyParties(expiredEscrow, 'ESCROW_EXPIRED', {
+      reason: 'Escrow expired while pending',
+      expiredAt: expiredEscrow.expiresAt,
+    });
 
     this.logger.log(`Successfully expired pending escrow: ${escrow.id}`);
   }
@@ -140,7 +152,16 @@ export class EscrowSchedulerService {
       `Escalating expired active escrow to expired status: ${escrow.id}`,
     );
 
-    await this.escrowService.expireBySystem(escrow.id, 'EXPIRED_ACTIVE');
+    const expiredEscrow = await this.escrowService.expireBySystem(
+      escrow.id,
+      'EXPIRED_ACTIVE',
+    );
+
+    void this.notifyParties(expiredEscrow, 'ESCROW_EXPIRED', {
+      reason: 'Escrow expired while active',
+      expiredAt: expiredEscrow.expiresAt,
+      requiresArbitration: true,
+    });
 
     this.logger.log(`Successfully expired active escrow: ${escrow.id}`);
   }
@@ -170,11 +191,57 @@ export class EscrowSchedulerService {
       cursor: nextCursor,
     });
 
-    await this.escrowService.queueExpirationWarningNotifications(escrow);
+    void this.notifyParties(escrow, 'ESCROW_EXPIRING_SOON', {
+      expiresAt: escrow.expiresAt,
+      hoursUntilExpiry: this.getHoursUntilExpiry(escrow.expiresAt!),
+    });
 
     this.logger.log(
       `Successfully sent expiration warning for escrow: ${escrow.id}`,
     );
+  }
+
+  private notifyParties(
+    escrow: Escrow,
+    eventType: string,
+    data: Record<string, unknown>,
+  ) {
+    const notifications = escrow.parties.map((party) => ({
+      walletAddress: party.user.walletAddress,
+      type: eventType,
+      data: {
+        escrowId: escrow.id,
+        escrowTitle: escrow.title,
+        ...data,
+      },
+    }));
+
+    this.logger.log(
+      `Sending ${notifications.length} notifications for escrow ${escrow.id}`,
+    );
+
+    for (const notification of notifications) {
+      try {
+        void this.sendWebhookNotification(notification);
+      } catch (error) {
+        this.logger.error(
+          `Failed to send notification to ${notification.walletAddress}:`,
+          error,
+        );
+      }
+    }
+  }
+
+  private sendWebhookNotification(notification: Record<string, unknown>) {
+    this.logger.log(
+      `Sending webhook notification: ${JSON.stringify(notification)}`,
+    );
+  }
+
+  private getHoursUntilExpiry(expiresAt: Date): number {
+    const now = new Date();
+    const diffMs = expiresAt.getTime() - now.getTime();
+    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
   }
 
   async processEscrowManually(escrowId: string): Promise<void> {

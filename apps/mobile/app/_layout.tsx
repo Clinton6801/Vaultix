@@ -1,21 +1,14 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-import { AppState, AppStateStatus, ActivityIndicator, StyleSheet, View } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
 import { useBiometricLock } from '../hooks/useBiometricLock';
 import { MobileLockScreen } from '../components/MobileLockScreen';
-import { useEffect, useRef, useState } from 'react';
-import { initializeAuthState } from '../services/auth';
+import { useEffect, useRef } from 'react';
 
 export default function RootLayout() {
   const { isEnabled, isUnlocked, authenticate, lock, disableBiometric } = useBiometricLock();
   const appState = useRef(AppState.currentState);
-
-  const [authReady, setAuthReady] = useState(false);
-
-  useEffect(() => {
-    initializeAuthState().finally(() => setAuthReady(true));
-  }, []);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -36,14 +29,6 @@ export default function RootLayout() {
       subscription.remove();
     };
   }, [isEnabled, authenticate, lock]);
-
-  if (!authReady) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6c63ff" />
-      </View>
-    );
-  }
 
   if (!isUnlocked) {
     return (
@@ -79,12 +64,3 @@ export default function RootLayout() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#12121f',
-  },
-});

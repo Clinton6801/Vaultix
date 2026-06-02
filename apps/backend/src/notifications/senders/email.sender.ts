@@ -112,7 +112,6 @@ export class EmailSender implements NotificationSender {
       [NotificationEventType.CONDITION_FULFILLED]: `Condition fulfilled for escrow ${escrowId}`,
       [NotificationEventType.CONDITION_CONFIRMED]: `Condition confirmed for escrow ${escrowId}`,
       [NotificationEventType.EXPIRATION_WARNING]: `Escrow expiring in 24h: ${escrowId}`,
-      [NotificationEventType.PARTY_INVITED]: `You were invited to escrow ${escrowId}`,
     };
 
     const textByEvent: Record<NotificationEventType, string> = {
@@ -133,7 +132,6 @@ export class EmailSender implements NotificationSender {
       [NotificationEventType.EXPIRATION_WARNING]:
         `Escrow ${escrowId} will expire in approximately 24 hours` +
         (expiresAt ? ` (at ${expiresAt}).` : '.'),
-      [NotificationEventType.PARTY_INVITED]: `You have been invited to participate in escrow ${escrowId}.`,
     };
 
     const actionLine = actionUrl ? `\n\nReview details: ${actionUrl}` : '';

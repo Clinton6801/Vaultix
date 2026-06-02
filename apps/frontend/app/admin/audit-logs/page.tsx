@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   FileText,
   Filter,
@@ -15,8 +14,6 @@ import {
   Database,
 } from 'lucide-react';
 import { AdminService } from '@/services/admin';
-import { AdminAuditLogsSkeleton } from '@/components/ui/AdminAuditLogsSkeleton';
-import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { IAuditLogResponse, IAuditLogFilters } from '@/types/admin';
 
 const ACTION_COLORS: Record<string, string> = {
@@ -35,27 +32,17 @@ const RESOURCE_ICONS: Record<string, React.ElementType> = {
 };
 
 export default function AdminAuditLogsPage() {
-  const router = useRouter();
-  const { isAdmin, isLoading: authLoading } = useAdminAuth();
   const [data, setData] = useState<IAuditLogResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<IAuditLogFilters>({});
   const [showFilters, setShowFilters] = useState(false);
 
-  // Redirect non-admins to dashboard
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push('/dashboard');
-    }
-  }, [isAdmin, authLoading, router]);
-
   const actionTypes = ['SUSPEND_USER', 'CREATE_ESCROW', 'UPDATE_ESCROW', 'CONSISTENCY_CHECK', 'LOGIN', 'ROLE_CHANGE'];
   const resourceTypes = ['USER', 'ESCROW', 'SYSTEM'];
   const pageSize = 15;
 
   const fetchLogs = useCallback(async () => {
-    if (!isAdmin) return;
     setLoading(true);
     try {
       const result = await AdminService.getAuditLogs({
@@ -67,7 +54,7 @@ export default function AdminAuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, filters, isAdmin]);
+  }, [page, filters]);
 
   useEffect(() => {
     fetchLogs();
@@ -89,23 +76,6 @@ export default function AdminAuditLogsPage() {
   };
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
-
-  // Show loading while checking auth
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-          <p className="text-sm text-gray-500">Verifying admin access...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect guard
-  if (!isAdmin) {
-    return null;
-  }
 
   return (
     <div className="space-y-6">

@@ -36,8 +36,6 @@ import { EscrowFundingService } from '../escrow-funding.service';
 import { EscrowDisputeService } from '../escrow-dispute.service';
 import { EscrowQueryService } from '../escrow-query.service';
 import { StellarService } from '../../../services/stellar.service';
-import { NotificationService } from '../../../notifications/notifications.service';
-import { ConfigService } from '@nestjs/config';
 
 describe('EscrowService', () => {
   let service: EscrowService;
@@ -51,7 +49,6 @@ describe('EscrowService', () => {
 
   let ipfsService: { uploadFile: jest.Mock; getGatewayUrl: jest.Mock };
   let webhookService: { dispatchEvent: jest.Mock };
-  let notificationService: { handleEscrowEvent: jest.Mock };
 
   // ✅ NEW MOCKS
   let lifecycleService: {
@@ -141,7 +138,6 @@ describe('EscrowService', () => {
 
     const mockUserRepo = {
       findOne: jest.fn(),
-      find: jest.fn(),
     };
 
     const mockAssetRepo = {
@@ -172,10 +168,6 @@ describe('EscrowService', () => {
 
     const mockQueryService = {
       findOverview: jest.fn(),
-    };
-
-    const mockNotificationService = {
-      handleEscrowEvent: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -230,18 +222,6 @@ describe('EscrowService', () => {
             }),
           },
         },
-        {
-          provide: NotificationService,
-          useValue: mockNotificationService,
-        },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn((key: string, fallback?: string) =>
-              key === 'FRONTEND_URL' ? 'https://app.vaultix.test' : fallback,
-            ),
-          },
-        },
       ],
     }).compile();
 
@@ -258,7 +238,6 @@ describe('EscrowService', () => {
 
     ipfsService = module.get(IpfsService);
     webhookService = module.get(WebhookService);
-    notificationService = module.get(NotificationService);
 
     lifecycleService = module.get(EscrowLifecycleService);
     fundingService = module.get(EscrowFundingService);
@@ -268,38 +247,6 @@ describe('EscrowService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
-  });
-
-  it('should queue expiration warning notifications with action URLs', async () => {
-    userRepository.find.mockResolvedValue([
-      {
-        id: 'user-123',
-        walletAddress: 'buyer-wallet',
-        email: 'buyer@example.com',
-      } as User & { email: string },
-      {
-        id: 'user-456',
-        walletAddress: 'seller-wallet',
-        email: 'seller@example.com',
-      } as User & { email: string },
-    ]);
-
-    await service.queueExpirationWarningNotifications({
-      ...mockEscrow,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      parties: [mockParty as Party],
-    } as Escrow);
-
-    expect(notificationService.handleEscrowEvent).toHaveBeenCalledTimes(2);
-    expect(notificationService.handleEscrowEvent).toHaveBeenCalledWith(
-      'user-456',
-      'EXPIRATION_WARNING',
-      expect.objectContaining({
-        escrowId: 'escrow-123',
-        actionUrl: 'https://app.vaultix.test/escrow/escrow-123',
-        recipientEmail: 'seller@example.com',
-      }),
-    );
   });
 
   // ✅ KEEP ALL YOUR EXISTING TESTS BELOW UNCHANGED
