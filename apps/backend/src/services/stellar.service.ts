@@ -34,7 +34,18 @@ export class StellarService {
    * @param publicKey The public key of the account to retrieve
    * @returns Account record with balance and sequence number
    */
-  async getAccount(publicKey: string): Promise<StellarAccountResponse> {
+ 
+   async checkHealth(): Promise<boolean> {
+    try {
+       await this.server.root();
+       return true;
+     } catch {
+       return false;
+     }
+   } 
+
+
+   async getAccount(publicKey: string): Promise<StellarAccountResponse> {
     try {
       this.logger.log(`Fetching account info for: ${publicKey}`);
 
