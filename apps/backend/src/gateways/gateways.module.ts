@@ -8,4 +8,3 @@ import { EscrowGateway } from './escrow.gateway';
   exports: [EscrowGateway],
 })
 export class GatewaysModule {}
-

@@ -28,10 +28,12 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/middleware/auth.guard';
+import { AdminGuard } from '../../auth/middleware/admin.guard';
 import { EscrowAccessGuard } from '../guards/escrow-access.guard';
 import { EscrowExpireGuard } from '../guards/escrow-expire.guard';
 import { EscrowService } from '../services/escrow.service';
 import { EscrowEvidenceService } from '../services/escrow-evidence.service';
+import { IpfsService } from '../../ipfs/ipfs.service';
 import { CreateEscrowDto } from '../dto/create-escrow.dto';
 import { UpdateEscrowDto } from '../dto/update-escrow.dto';
 import { ListEscrowsDto } from '../dto/list-escrows.dto';
@@ -63,6 +65,7 @@ export class EscrowController {
   constructor(
     private readonly escrowService: EscrowService,
     private readonly evidenceService: EscrowEvidenceService,
+    private readonly ipfsService: IpfsService,
   ) {}
 
   private getAuthenticatedUserId(req: AuthenticatedRequest): string {
@@ -435,5 +438,41 @@ export class EscrowController {
   ): Promise<void> {
     const userId = this.getAuthenticatedUserId(req);
     await this.evidenceService.getEvidenceFile(id, cid, userId, res);
+  }
+
+  /**
+   * GET /escrows/:id/metadata
+   * Get escrow metadata from IPFS
+   */
+  @Get(':id/metadata')
+  @UseGuards(EscrowAccessGuard)
+  @ApiOperation({ summary: 'Get escrow metadata from IPFS' })
+  async getEscrowMetadata(@Param('id') id: string) {
+    return this.ipfsService.getMetadata(id);
+  }
+
+  /**
+   * GET /escrows/:id/metadata/verify
+   * Verify escrow metadata integrity
+   */
+  @Get(':id/metadata/verify')
+  @UseGuards(EscrowAccessGuard)
+  @ApiOperation({ summary: 'Verify escrow metadata integrity' })
+  async verifyEscrowMetadata(@Param('id') id: string) {
+    return this.ipfsService.verifyMetadata(id);
+  }
+
+  /**
+   * POST /escrows/:id/metadata/pin
+   * Pin escrow metadata to IPFS (admin only)
+   */
+  @Post(':id/metadata/pin')
+  @UseGuards(EscrowAccessGuard, AdminGuard)
+  @ApiOperation({ summary: 'Pin escrow metadata to IPFS (admin only)' })
+  async pinEscrowMetadata(
+    @Param('id') id: string,
+    @Body() metadata?: Record<string, unknown>,
+  ) {
+    return this.ipfsService.pinMetadata(id, metadata || {});
   }
 }

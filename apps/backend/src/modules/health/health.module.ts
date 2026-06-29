@@ -7,7 +7,11 @@ import { User } from '../user/entities/user.entity';
 import { Escrow } from '../escrow/entities/escrow.entity';
 
 @Module({
-  imports: [TerminusModule, TypeOrmModule.forFeature([User, Escrow]), GatewaysModule,],
+  imports: [
+    TerminusModule,
+    TypeOrmModule.forFeature([User, Escrow]),
+    GatewaysModule,
+  ],
   controllers: [HealthController],
   providers: [TypeOrmHealthIndicator],
 })
