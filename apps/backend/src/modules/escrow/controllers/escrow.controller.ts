@@ -29,6 +29,7 @@ import { AuthGuard } from '../../auth/middleware/auth.guard';
 import { EscrowAccessGuard } from '../guards/escrow-access.guard';
 import { EscrowExpireGuard } from '../guards/escrow-expire.guard';
 import { EscrowService } from '../services/escrow.service';
+import { EscrowEventStoreService } from '../services/escrow-event-store.service';
 import { CreateEscrowDto } from '../dto/create-escrow.dto';
 import { UpdateEscrowDto } from '../dto/update-escrow.dto';
 import { ListEscrowsDto } from '../dto/list-escrows.dto';
@@ -53,7 +54,10 @@ interface AuthenticatedRequest extends ExpressRequest {
 @ApiBearerAuth()
 @UseGuards(ThrottlerGuard, AuthGuard)
 export class EscrowController {
-  constructor(private readonly escrowService: EscrowService) {}
+  constructor(
+    private readonly escrowService: EscrowService,
+    private readonly eventStoreService: EscrowEventStoreService,
+  ) {}
 
   private getAuthenticatedUserId(req: AuthenticatedRequest): string {
     const userId = req.user.sub ?? req.user.userId;
@@ -365,6 +369,7 @@ export class EscrowController {
       ipAddress,
     );
   }
+
   @Post(':id/evidence')
   @UseGuards(EscrowAccessGuard)
   @UseInterceptors(FileInterceptor('file'))
@@ -385,5 +390,51 @@ export class EscrowController {
   ) {
     const userId = this.getAuthenticatedUserId(req);
     return this.escrowService.uploadEvidence(id, userId, file);
+  }
+
+  // ===== EVENT STORE ENDPOINTS =====
+
+  /**
+   * GET /escrows/:id/event-store
+   * Get paginated events from the event store for a specific escrow
+   * Query params: ?type=CREATED&page=1&limit=20
+   */
+  @Get(':id/event-store')
+  @UseGuards(EscrowAccessGuard)
+  @ApiOperation({ summary: 'Get event store events for an escrow' })
+  async getEventStoreEvents(
+    @Param('id') escrowId: string,
+    @Query('type') eventType?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return this.eventStoreService.getEventsForEscrow(escrowId, {
+      eventType: eventType as any,
+      page,
+      limit,
+    });
+  }
+
+  /**
+   * GET /escrows/:id/timeline
+   * Get a human-readable timeline of events for an escrow
+   */
+  @Get(':id/timeline')
+  @UseGuards(EscrowAccessGuard)
+  @ApiOperation({ summary: 'Get human-readable timeline for an escrow' })
+  async getTimeline(@Param('id') escrowId: string) {
+    return this.eventStoreService.buildTimeline(escrowId);
+  }
+
+  /**
+   * POST /admin/escrows/:id/replay-events
+   * Replay all events for an escrow and detect inconsistencies
+   * Admin only
+   */
+  @Post('admin/:id/replay-events')
+  @ApiOperation({ summary: 'Replay events and detect inconsistencies (admin only)' })
+  async replayEvents(@Param('id') escrowId: string) {
+    // TODO: Add admin role guard when available
+    return this.eventStoreService.replayEvents(escrowId);
   }
 }

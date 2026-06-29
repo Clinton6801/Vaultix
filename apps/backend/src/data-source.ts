@@ -6,6 +6,7 @@ import { Escrow } from './modules/escrow/entities/escrow.entity';
 import { Party } from './modules/escrow/entities/party.entity';
 import { Condition } from './modules/escrow/entities/condition.entity';
 import { EscrowEvent } from './modules/escrow/entities/escrow-event.entity';
+import { EscrowEventStore } from './modules/escrow/entities/escrow-event-store.entity';
 import { Dispute } from './modules/escrow/entities/dispute.entity';
 import { Notification } from './notifications/entities/notification.entity';
 import { NotificationPreference } from './notifications/entities/notification-preference.entity';
@@ -28,6 +29,7 @@ export default new DataSource({
     Party,
     Condition,
     EscrowEvent,
+    EscrowEventStore,
     Dispute,
     Notification,
     NotificationPreference,
