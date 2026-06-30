@@ -28,10 +28,12 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from '../../auth/middleware/auth.guard';
+import { AdminGuard } from '../../auth/middleware/admin.guard';
 import { EscrowAccessGuard } from '../guards/escrow-access.guard';
 import { EscrowExpireGuard } from '../guards/escrow-expire.guard';
 import { EscrowService } from '../services/escrow.service';
 import { EscrowEvidenceService } from '../services/escrow-evidence.service';
+import { IpfsService } from '../../ipfs/ipfs.service';
 import { CreateEscrowDto } from '../dto/create-escrow.dto';
 import { UpdateEscrowDto } from '../dto/update-escrow.dto';
 import { ListEscrowsDto } from '../dto/list-escrows.dto';
@@ -63,6 +65,7 @@ export class EscrowController {
   constructor(
     private readonly escrowService: EscrowService,
     private readonly evidenceService: EscrowEvidenceService,
+    private readonly ipfsService: IpfsService,
   ) {}
 
   private getAuthenticatedUserId(req: AuthenticatedRequest): string {
@@ -437,49 +440,39 @@ export class EscrowController {
     await this.evidenceService.getEvidenceFile(id, cid, userId, res);
   }
 
-  // ===== EVENT STORE ENDPOINTS =====
+  /**
+   * GET /escrows/:id/metadata
+   * Get escrow metadata from IPFS
+   */
+  @Get(':id/metadata')
+  @UseGuards(EscrowAccessGuard)
+  @ApiOperation({ summary: 'Get escrow metadata from IPFS' })
+  async getEscrowMetadata(@Param('id') id: string) {
+    return this.ipfsService.getMetadata(id);
+  }
 
   /**
-   * GET /escrows/:id/event-store
-   * Get paginated events from the event store for a specific escrow
-   * Query params: ?type=CREATED&page=1&limit=20
+   * GET /escrows/:id/metadata/verify
+   * Verify escrow metadata integrity
    */
-  @Get(':id/event-store')
+  @Get(':id/metadata/verify')
   @UseGuards(EscrowAccessGuard)
-  @ApiOperation({ summary: 'Get event store events for an escrow' })
-  async getEventStoreEvents(
-    @Param('id') escrowId: string,
-    @Query('type') eventType?: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
+  @ApiOperation({ summary: 'Verify escrow metadata integrity' })
+  async verifyEscrowMetadata(@Param('id') id: string) {
+    return this.ipfsService.verifyMetadata(id);
+  }
+
+  /**
+   * POST /escrows/:id/metadata/pin
+   * Pin escrow metadata to IPFS (admin only)
+   */
+  @Post(':id/metadata/pin')
+  @UseGuards(EscrowAccessGuard, AdminGuard)
+  @ApiOperation({ summary: 'Pin escrow metadata to IPFS (admin only)' })
+  async pinEscrowMetadata(
+    @Param('id') id: string,
+    @Body() metadata?: Record<string, unknown>,
   ) {
-    return this.eventStoreService.getEventsForEscrow(escrowId, {
-      eventType: eventType as any,
-      page,
-      limit,
-    });
-  }
-
-  /**
-   * GET /escrows/:id/timeline
-   * Get a human-readable timeline of events for an escrow
-   */
-  @Get(':id/timeline')
-  @UseGuards(EscrowAccessGuard)
-  @ApiOperation({ summary: 'Get human-readable timeline for an escrow' })
-  async getTimeline(@Param('id') escrowId: string) {
-    return this.eventStoreService.buildTimeline(escrowId);
-  }
-
-  /**
-   * POST /admin/escrows/:id/replay-events
-   * Replay all events for an escrow and detect inconsistencies
-   * Admin only
-   */
-  @Post('admin/:id/replay-events')
-  @ApiOperation({ summary: 'Replay events and detect inconsistencies (admin only)' })
-  async replayEvents(@Param('id') escrowId: string) {
-    // TODO: Add admin role guard when available
-    return this.eventStoreService.replayEvents(escrowId);
+    return this.ipfsService.pinMetadata(id, metadata || {});
   }
 }

@@ -42,17 +42,17 @@ export class HealthController {
   live(): { status: string } {
     return {
       status: 'ok',
-  };
-}
+    };
+  }
 
   @Get('ready')
   @HealthCheck()
   async ready(): Promise<HealthCheckResult> {
     return this.health.check([
-     () => this.checkDatabase(),
-     () => this.checkStellar(),
-     () => this.checkWebSocket(),
-   ]);
+      () => this.checkDatabase(),
+      () => this.checkStellar(),
+      () => this.checkWebSocket(),
+    ]);
   }
 
   private checkWebSocket(): HealthIndicatorResult {
@@ -84,8 +84,8 @@ export class HealthController {
   }
 
   private async checkDatabase(): Promise<HealthIndicatorResult> {
-     return this.typeOrmHealthIndicator.pingCheck('database');
-  }  
+    return this.typeOrmHealthIndicator.pingCheck('database');
+  }
 
   private async checkStellar(): Promise<HealthIndicatorResult> {
     const healthy = await this.stellarService.checkHealth();

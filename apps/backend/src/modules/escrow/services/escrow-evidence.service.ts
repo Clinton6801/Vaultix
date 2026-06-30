@@ -126,10 +126,7 @@ export class EscrowEvidenceService {
       dispute.evidenceFiles = [];
     }
 
-    dispute.evidenceFiles = [
-      ...dispute.evidenceFiles,
-      ...uploadedMetadata,
-    ];
+    dispute.evidenceFiles = [...dispute.evidenceFiles, ...uploadedMetadata];
 
     // Save the dispute record
     dispute = await this.disputeRepo.save(dispute);
@@ -155,7 +152,9 @@ export class EscrowEvidenceService {
     escrowId: string,
     userId: string,
   ): Promise<EvidenceFileMetadataDto[]> {
-    this.logger.log(`Fetching evidence for escrow ${escrowId} by user ${userId}`);
+    this.logger.log(
+      `Fetching evidence for escrow ${escrowId} by user ${userId}`,
+    );
 
     // Verify access
     await this.verifyEscrowAccess(escrowId, userId);

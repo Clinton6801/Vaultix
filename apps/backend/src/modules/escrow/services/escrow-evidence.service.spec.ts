@@ -97,7 +97,11 @@ describe('EscrowEvidenceService', () => {
       const savedDispute = { ...mockDispute };
       disputeRepo.save.mockResolvedValue(savedDispute);
 
-      const result = await service.uploadEvidence(mockEscrowId, files, mockUserId);
+      const result = await service.uploadEvidence(
+        mockEscrowId,
+        files,
+        mockUserId,
+      );
 
       expect(result.escrowId).toBe(mockEscrowId);
       expect(result.disputeId).toBe(mockDisputeId);
@@ -290,9 +294,16 @@ describe('EscrowEvidenceService', () => {
 
       escrowRepo.findOne.mockResolvedValue(mockEscrow);
       disputeRepo.findOne.mockResolvedValue(mockDispute);
-      ipfsService.getGatewayUrl.mockReturnValue('https://gateway.ipfs.io/ipfs/Qm...');
+      ipfsService.getGatewayUrl.mockReturnValue(
+        'https://gateway.ipfs.io/ipfs/Qm...',
+      );
 
-      await service.getEvidenceFile(mockEscrowId, mockCid, mockUserId, mockResponse);
+      await service.getEvidenceFile(
+        mockEscrowId,
+        mockCid,
+        mockUserId,
+        mockResponse,
+      );
 
       expect(mockResponse.setHeader).toHaveBeenCalledWith(
         'Content-Type',
@@ -322,7 +333,12 @@ describe('EscrowEvidenceService', () => {
       disputeRepo.findOne.mockResolvedValue(mockDispute);
 
       await expect(
-        service.getEvidenceFile(mockEscrowId, 'QmNonExistent', mockUserId, mockResponse),
+        service.getEvidenceFile(
+          mockEscrowId,
+          'QmNonExistent',
+          mockUserId,
+          mockResponse,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });

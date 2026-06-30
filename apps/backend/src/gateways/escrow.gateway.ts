@@ -238,5 +238,4 @@ export class EscrowGateway implements OnGatewayConnection, OnGatewayDisconnect {
   isHealthy(): boolean {
     return this.server !== undefined;
   }
-
 }
