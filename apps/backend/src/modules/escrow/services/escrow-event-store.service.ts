@@ -1,7 +1,6 @@
 import {
   Injectable,
   ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -29,8 +28,8 @@ export interface TimelineEntry {
 }
 
 export interface ReplayResult {
-  reconstructedState: Record<string, any>;
-  currentState: Record<string, any>;
+  reconstructedState: Record<string, unknown>;
+  currentState: Record<string, unknown>;
   inconsistencies: string[];
   isConsistent: boolean;
 }
@@ -66,13 +65,13 @@ export class EscrowEventStoreService {
     }
 
     // Get current max version for this escrowId
-    const maxVersionResult = await this.eventStoreRepository
+    const maxVersionResult: { max: number | null } = await this.eventStoreRepository
       .createQueryBuilder('event')
-      .select('MAX(event.version)', 'maxVersion')
+      .select('MAX(event.version)', 'max')
       .where('event.escrowId = :escrowId', { escrowId: dto.escrowId })
       .getRawOne();
 
-    const maxVersion = maxVersionResult?.maxVersion || 0;
+    const maxVersion: number = maxVersionResult?.max ?? 0;
     const nextVersion = maxVersion + 1;
 
     // Insert the new event (use repository.insert for append-only)
@@ -89,8 +88,8 @@ export class EscrowEventStoreService {
     });
 
     // Retrieve and return the inserted event
-    const newEvent = await this.eventStoreRepository.findOne({
-      where: { id: insertResult.identifiers[0].id },
+    const newEvent: EscrowEventStore | null = await this.eventStoreRepository.findOne({
+      where: { id: (insertResult.identifiers[0] as { id: string }).id },
     });
 
     if (!newEvent) {
@@ -160,9 +159,6 @@ export class EscrowEventStoreService {
     }
 
     if (filters?.eventType) {
-      const whereClause = filters.actorId
-        ? 'AND event.eventType = :eventType'
-        : 'WHERE event.eventType = :eventType';
       query = query.andWhere('event.eventType = :eventType', {
         eventType: filters.eventType,
       });
@@ -243,7 +239,7 @@ export class EscrowEventStoreService {
   /**
    * Prevent update or delete operations on events
    */
-  async protectAppendOnly(): Promise<never> {
+  protectAppendOnly(): never {
     throw new ForbiddenException(
       'Event store is append-only: updates and deletes are forbidden',
     );
@@ -256,19 +252,19 @@ export class EscrowEventStoreService {
 
     const descriptions: Record<EscrowEventType, string> = {
       [EscrowEventType.CREATED]: 'Escrow created',
-      [EscrowEventType.FUNDED]: `Escrow funded with ${payload.amount} ${payload.asset || 'XLM'}`,
-      [EscrowEventType.CONDITION_FULFILLED]: `Condition fulfilled: ${payload.conditionDescription || '(no description)'}`,
-      [EscrowEventType.CONDITION_CONFIRMED]: `Condition confirmed by ${payload.confirmedBy || 'system'}`,
-      [EscrowEventType.MILESTONE_RELEASED]: `Milestone released: ${payload.milestoneDescription || '(no description)'}`,
-      [EscrowEventType.PARTY_INVITED]: `Party invited: ${payload.partyEmail || payload.partyId || '(unknown)'}`,
+      [EscrowEventType.FUNDED]: `Escrow funded with ${String(payload['amount'] ?? '?')} ${String(payload['asset'] ?? 'XLM')}`,
+      [EscrowEventType.CONDITION_FULFILLED]: `Condition fulfilled: ${String(payload['conditionDescription'] ?? '(no description)')}`,
+      [EscrowEventType.CONDITION_CONFIRMED]: `Condition confirmed by ${String(payload['confirmedBy'] ?? 'system')}`,
+      [EscrowEventType.MILESTONE_RELEASED]: `Milestone released: ${String(payload['milestoneDescription'] ?? '(no description)')}`,
+      [EscrowEventType.PARTY_INVITED]: `Party invited: ${String(payload['partyEmail'] ?? payload['partyId'] ?? '(unknown)')}`,
       [EscrowEventType.PARTY_ACCEPTED]: `Party accepted invitation`,
       [EscrowEventType.PARTY_REJECTED]: `Party rejected invitation`,
-      [EscrowEventType.DISPUTE_FILED]: `Dispute filed: ${payload.reason || '(no reason provided)'}`,
-      [EscrowEventType.DISPUTE_RESOLVED]: `Dispute resolved: ${payload.outcome || '(no outcome recorded)'}`,
-      [EscrowEventType.RELEASED]: `Funds released to ${payload.recipientId || '(unknown recipient)'}`,
-      [EscrowEventType.CANCELLED]: `Escrow cancelled: ${payload.cancellationReason || '(no reason provided)'}`,
+      [EscrowEventType.DISPUTE_FILED]: `Dispute filed: ${String(payload['reason'] ?? '(no reason provided)')}`,
+      [EscrowEventType.DISPUTE_RESOLVED]: `Dispute resolved: ${String(payload['outcome'] ?? '(no outcome recorded)')}`,
+      [EscrowEventType.RELEASED]: `Funds released to ${String(payload['recipientId'] ?? '(unknown recipient)')}`,
+      [EscrowEventType.CANCELLED]: `Escrow cancelled: ${String(payload['cancellationReason'] ?? '(no reason provided)')}`,
       [EscrowEventType.EXPIRED]: `Escrow expired`,
-      [EscrowEventType.REFUND_PROCESSED]: `Refund processed to ${payload.refundRecipient || '(unknown)'}`,
+      [EscrowEventType.REFUND_PROCESSED]: `Refund processed to ${String(payload['refundRecipient'] ?? '(unknown)')}`,
       [EscrowEventType.EXPIRATION_WARNING]: `Expiration warning sent`,
     };
 
@@ -277,8 +273,8 @@ export class EscrowEventStoreService {
 
   private reconstructStateFromEvents(
     events: EscrowEventStore[],
-  ): Record<string, any> {
-    let state: Record<string, any> = {
+  ): Record<string, unknown> {
+    let state: Record<string, unknown> = {
       status: 'pending',
       isFunded: false,
       isReleased: false,
@@ -291,7 +287,10 @@ export class EscrowEventStoreService {
     };
 
     for (const event of events) {
-      state.eventsProcessed += 1;
+      state = {
+        ...state,
+        eventsProcessed: ((state['eventsProcessed'] as number) ?? 0) + 1,
+      };
 
       switch (event.eventType) {
         case EscrowEventType.CREATED:
@@ -301,10 +300,10 @@ export class EscrowEventStoreService {
           state.isFunded = true;
           break;
         case EscrowEventType.CONDITION_FULFILLED:
-          state.conditionsFulfilled += 1;
+          state.conditionsFulfilled = ((state['conditionsFulfilled'] as number) ?? 0) + 1;
           break;
         case EscrowEventType.MILESTONE_RELEASED:
-          state.milestoneCount += 1;
+          state.milestoneCount = ((state['milestoneCount'] as number) ?? 0) + 1;
           break;
         case EscrowEventType.RELEASED:
           state.isReleased = true;
@@ -332,18 +331,21 @@ export class EscrowEventStoreService {
   }
 
   private detectInconsistencies(
-    reconstructedState: Record<string, any>,
-    currentState: Record<string, any>,
+    reconstructedState: Record<string, unknown>,
+    currentState: Record<string, unknown>,
   ): string[] {
     const inconsistencies: string[] = [];
 
     // Check if event count doesn't match expectations
+    const reconstructedCount = (reconstructedState['eventsProcessed'] as number) ?? 0;
+    const currentCount = (currentState['eventCount'] as number) ?? undefined;
+    
     if (
-      reconstructedState.eventsProcessed !== currentState.eventCount &&
-      currentState.eventCount !== undefined
+      reconstructedCount !== currentCount &&
+      currentCount !== undefined
     ) {
       inconsistencies.push(
-        `Event count mismatch: reconstructed=${reconstructedState.eventsProcessed}, current=${currentState.eventCount}`,
+        `Event count mismatch: reconstructed=${reconstructedCount}, current=${currentCount}`,
       );
     }
 
